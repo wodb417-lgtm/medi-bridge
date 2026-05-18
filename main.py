@@ -345,22 +345,42 @@ def transcribe_audio(
     detected = resolve_app_lang_code(raw_detected, default="")
     if not detected and language_hint:
         detected = resolve_app_lang_code(language_hint, default=DEFAULT_DOCTOR_TARGET_LANG)
-    if not detected:
+    if not detected and not auto_detect_only:
         detected = DEFAULT_DOCTOR_TARGET_LANG
     return text, detected
 
 
-def resolve_patient_target_lang(override: str | None = None) -> str:
-    """환자 모니터 표시·의사→환자 번역 타깃 언어 (의사 수동 선택 > 세션 고정 > 기본 영어)."""
-    if override:
-        lowered = str(override).lower().strip()
-        if lowered not in ("", "auto", "unknown"):
-            resolved = resolve_app_lang_code(override, default="")
-            if resolved:
-                return resolved
-    if current_session_lang:
+def resolve_patient_target_lang() -> str:
+    """의사→환자 TTS/번역 타깃: 환자 발화 자동 감지로 잠긴 세션 언어, 없으면 기본 영어."""
+    if current_session_lang and current_session_lang != "ko":
         return current_session_lang
     return DEFAULT_DOCTOR_TARGET_LANG
+
+
+def reconcile_patient_korean_false_positive(whisper_text: str) -> str:
+    """Whisper가 환자 음성을 한국어로 오인한 경우 GPT로 소음 제거 또는 의역."""
+    cleaned = (whisper_text or "").strip()
+    if not cleaned:
+        return ""
+    user_content = (
+        "A foreign patient's speech was incorrectly transcribed as Korean by the speech-to-text system.\n\n"
+        f"False Korean transcript:\n{cleaned}\n\n"
+        "Rules:\n"
+        "1. If this is only noise, mumbling, breath sounds, or meaningless clinic background audio, "
+        "output exactly an empty string (nothing else).\n"
+        "2. If it likely was foreign speech (e.g. English, Vietnamese) misheard as Korean, "
+        "infer the clinical meaning and output ONE clear, polite Korean sentence for the doctor.\n"
+        "3. Output ONLY the final Korean text, or an empty string — no labels or explanations."
+    )
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": MEDICAL_INTERPRETER_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        temperature=0.2,
+    )
+    return (response.choices[0].message.content or "").strip()
 
 
 def translate_text(text: str, source_lang: str, target_lang: str) -> str:
@@ -485,16 +505,47 @@ async def process_audio_session(
                 transcribe_audio, tmp_path, None, auto_detect_only=True
             )
         else:
-            language_hint = current_session_lang if current_session_lang else None
             original, detected_source = await asyncio.to_thread(
-                transcribe_audio, tmp_path, language_hint
+                transcribe_audio, tmp_path, None, auto_detect_only=True
             )
+            detected_norm = normalize_lang_code(detected_source) if detected_source else ""
+            logger.info(
+                "Patient speech: Whisper auto-detect → language=%r text_len=%d",
+                detected_norm or "(unknown)",
+                len(original),
+            )
+
+            if detected_norm == "ko":
+                logger.info("Patient ko detection — running false-positive filter")
+                original = await asyncio.to_thread(
+                    reconcile_patient_korean_false_positive, original
+                )
+                if not original:
+                    raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
+                display_lang = current_session_lang or DEFAULT_DOCTOR_TARGET_LANG
+                return build_ui_payload(
+                    {
+                        "type": "result",
+                        "speaker": "patient",
+                        "original": original,
+                        "translated": original,
+                        "detected_language": display_lang,
+                        "detected_language_label_ko": (
+                            label_ko_for_code(display_lang)
+                            if current_session_lang
+                            else "자동 감지 (한국어 오인식 보정)"
+                        ),
+                        "source_language": "ko",
+                        "session_lang": current_session_lang,
+                        "language_locked": current_session_lang is not None,
+                    }
+                )
 
         if not original:
             raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
 
         if speaker == "doctor":
-            dest_lang = resolve_patient_target_lang(target_lang)
+            dest_lang = resolve_patient_target_lang()
             logger.info(
                 "Doctor speech: whisper_source=%s → translate target=%s (override=%r)",
                 detected_source,
@@ -593,6 +644,8 @@ if STATIC_DIR.exists():
 @app.websocket("/ws/audio")
 async def websocket_audio(websocket: WebSocket):
     """모든 Origin·외부 IP에서 WebSocket 업그레이드를 허용 (Origin 검사 없음)."""
+    global patient_remote_chunks
+
     client = websocket.client
     client_addr = f"{client.host}:{client.port}" if client else "unknown"
     origin = websocket.headers.get("origin", "(없음)")

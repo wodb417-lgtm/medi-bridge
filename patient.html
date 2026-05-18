@@ -672,6 +672,7 @@
       }
 
       function applySessionState(msg) {
+        languageLocked = !!msg.language_locked;
         if (msg.language_locked && msg.session_lang) {
           showTranslationScreen(msg.detected_language_label_ko || msg.session_lang);
         } else {
@@ -730,6 +731,7 @@
         }
 
         if (msg.type === "reset" || msg.stop_audio) {
+          languageLocked = false;
           stopPatientAudio();
           if (isRemoteRecording) {
             isRemoteRecording = false;
