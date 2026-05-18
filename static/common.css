@@ -126,6 +126,17 @@ html, body {
   border-color: rgba(220, 38, 38, 0.15);
 }
 
+.status-badge--ok {
+  background: #edf8f0;
+  color: #1a7f37;
+  border-color: rgba(26, 127, 55, 0.2);
+}
+
+.status-badge--ok .status-dot {
+  background: #34c759;
+  box-shadow: 0 0 0 3px rgba(52, 199, 89, 0.35);
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -817,6 +828,11 @@ html, body {
   transform: translateY(-2px);
   filter: brightness(1.04);
   box-shadow: 0 12px 32px rgba(37, 99, 235, 0.45);
+}
+
+.audio-unlock-btn.is-connected {
+  background: linear-gradient(180deg, #34c759 0%, #1a7f37 100%);
+  box-shadow: 0 8px 24px rgba(52, 199, 89, 0.35);
 }
 
 .audio-unlock-btn:disabled {

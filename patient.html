@@ -230,9 +230,32 @@
 
       function setConnectionStatus(state, text) {
         connectionStatus.className = "status-badge";
-        if (state === "warn") connectionStatus.classList.add("status-badge--warn");
-        else if (state === "error") connectionStatus.classList.add("status-badge--error");
+        if (state === "warn") {
+          connectionStatus.classList.add("status-badge--warn");
+        } else if (state === "error") {
+          connectionStatus.classList.add("status-badge--error");
+        } else if (state === "ok") {
+          connectionStatus.classList.add("status-badge--ok");
+        }
         connectionStatusText.textContent = text;
+      }
+
+      function updateClinicConnectionUI(success) {
+        if (success) {
+          setConnectionStatus("ok", "🟢 진료실 연결 완료");
+          if (btnAudioUnlock) {
+            btnAudioUnlock.textContent = "✓ 진료실 연결 완료";
+            btnAudioUnlock.classList.add("is-connected");
+          }
+          hideAudioUnlockOverlay();
+          showWelcomeScreen({ skipUnlockCheck: true });
+        } else {
+          setConnectionStatus("error", "연결 실패 — 버튼을 다시 눌러 주세요");
+          if (btnAudioUnlock) {
+            btnAudioUnlock.disabled = false;
+            btnAudioUnlock.classList.remove("is-connected");
+          }
+        }
       }
 
       function setDetectedBadge(state, valueText) {
@@ -563,29 +586,40 @@
         return Promise.resolve();
       }
 
-      function unlockPatientAudio() {
+      function unlockSpeakerInUserGesture() {
         var Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) {
-          return Promise.reject(new Error("이 기기는 Web Audio API를 지원하지 않습니다."));
+          throw new Error("이 기기는 Web Audio API를 지원하지 않습니다.");
         }
-        audioCtx = new Ctx();
-        return audioCtx
-          .resume()
-          .then(function () {
-            if (!audioCtx) throw new Error("AudioContext lost");
-            try {
-              primeSilentBufferPlayback(audioCtx);
-            } catch (primeErr) {
-              console.warn("Web Audio silent prime skipped", primeErr);
-            }
-            return primeHtmlAudioElement();
-          })
-          .then(function () {
-            audioUnlocked = true;
-            try {
-              localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
-            } catch (e) { /* ignore */ }
+        if (!audioCtx || audioCtx.state === "closed") {
+          audioCtx = new Ctx();
+        }
+        return audioCtx.resume().then(function () {
+          if (!audioCtx) throw new Error("AudioContext lost");
+          primeSilentBufferPlayback(audioCtx);
+          primeHtmlAudioElement();
+        });
+      }
+
+      async function connectClinicOnUserGesture() {
+        setConnectionStatus("warn", "스피커·마이크 연결 중…");
+
+        await unlockSpeakerInUserGesture();
+
+        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (micStream) {
+          micStream.getTracks().forEach(function (t) {
+            t.stop();
           });
+        }
+        micStream = stream;
+        micReady = true;
+        audioUnlocked = true;
+        try {
+          localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
+        } catch (e) { /* ignore */ }
+
+        updateClinicConnectionUI(true);
       }
 
       function showWelcomeScreen(options) {
@@ -807,7 +841,11 @@
             ws = socket;
             wsConnectPromise = null;
             socket.send(JSON.stringify({ type: "register", role: "display" }));
-            setConnectionStatus("ok", "연결됨");
+            if (isAudioUnlocked()) {
+              setConnectionStatus("ok", "🟢 진료실 연결 완료");
+            } else {
+              setConnectionStatus("ok", "서버 연결됨");
+            }
             resolve(socket);
           };
 
@@ -838,30 +876,36 @@
       }
 
       if (btnAudioUnlock) {
-        btnAudioUnlock.addEventListener("click", function () {
+        btnAudioUnlock.addEventListener("click", function (e) {
+          e.preventDefault();
+          if (btnAudioUnlock.disabled) return;
           btnAudioUnlock.disabled = true;
-          (async function () {
-            try {
-              await unlockPatientAudio();
-              await preparePatientMic();
-            } catch (error) {
-              reportPatientError("unlock", error);
-            } finally {
-              hideAudioUnlockOverlay();
-              showWelcomeScreen({ skipUnlockCheck: true });
-              btnAudioUnlock.disabled = false;
+          btnAudioUnlock.classList.remove("is-connected");
+
+          connectClinicOnUserGesture().catch(function (error) {
+            var isMicDenied =
+              error &&
+              (error.name === "NotAllowedError" ||
+                error.name === "PermissionDeniedError");
+            if (isMicDenied) {
+              alert("마이크 권한이 거부되었습니다: " + (error.message || ""));
+            } else {
+              reportPatientError("connect", error);
             }
-          })();
+            updateClinicConnectionUI(false);
+          });
         });
       }
 
       if (needsAudioUnlockOverlay()) {
         showAudioUnlockOverlay();
+        setConnectionStatus("warn", "스피커·마이크 연결 필요");
       } else {
         audioUnlocked = true;
+        micReady = false;
         hideAudioUnlockOverlay();
-        showWelcomeScreen();
-        preparePatientMic().catch(function () { /* 권한 재요청 필요 시 unlock UI */ });
+        showWelcomeScreen({ skipUnlockCheck: true });
+        setConnectionStatus("warn", "🟢 연결됨 · 스피커 재활성화 필요");
       }
       connectWebSocket().catch(function () {});
     })();
