@@ -1,0 +1,6 @@
+# MediBridge backend (main.py) — Render.com / production install
+fastapi==0.136.1
+uvicorn[standard]==0.47.0
+openai==2.37.0
+websockets==16.0
+python-multipart==0.0.29

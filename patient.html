@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediBridge · 환자 (디스플레이)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="/static/common.css" />
+  <script src="/static/medibridge-ws.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">+</div>
+        <div>
+          <h1>MediBridge</h1>
+          <p>환자 디스플레이 · 읽기 전용</p>
+        </div>
+      </div>
+      <div id="connection-status" class="status-badge status-badge--warn">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="connection-status-text">서버 연결 중…</span>
+      </div>
+    </header>
+
+    <main class="panels panels--single">
+      <section class="panel panel--patient display-main" aria-label="환자 번역 화면">
+        <div class="display-stage">
+          <div id="audio-unlock-overlay" class="audio-unlock-overlay" aria-hidden="false">
+            <div class="audio-unlock-overlay__panel">
+              <p class="audio-unlock-overlay__title">MediBridge 환자 모니터</p>
+              <p class="audio-unlock-overlay__desc">출근 후 한 번만 눌러 주세요. 스피커·마이크 권한이 함께 활성화되며, 이후 번역 음성이 자동 재생됩니다.</p>
+              <button type="button" id="btn-audio-unlock" class="audio-unlock-btn">
+                🔊 진료실 스피커·마이크 연결하기 (출근 후 클릭)
+              </button>
+            </div>
+          </div>
+
+          <div id="display-processing" class="processing-overlay" aria-hidden="true">
+            <div class="processing-overlay__content">
+              <span class="processing-overlay__icon" aria-hidden="true">⏳</span>
+              <span class="processing-overlay__text">번역 중...</span>
+              <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            </div>
+          </div>
+          <div id="recording-prompt" class="patient-recording-prompt" aria-hidden="true">
+            <span class="patient-recording-prompt__icon" aria-hidden="true">🎙️</span>
+            <span class="patient-recording-prompt__text">지금 말씀하세요</span>
+            <span class="patient-recording-prompt__sub">의사 선생님이 듣고 있습니다</span>
+          </div>
+          <!-- 다국어 대기 화면 -->
+          <div id="welcome-screen" class="welcome-screen" aria-hidden="false">
+            <div class="welcome-content">
+              <div class="welcome-mic" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
+                </svg>
+              </div>
+              <p class="welcome-title">편하신 언어로 증상을 말씀해 주세요</p>
+              <ul class="welcome-messages">
+                <li>
+                  <span class="welcome-messages__lang">English</span>
+                  <span class="welcome-messages__text">Please describe your symptoms in your preferred language.</span>
+                </li>
+                <li>
+                  <span class="welcome-messages__lang">Tiếng Việt</span>
+                  <span class="welcome-messages__text">Vui lòng mô tả triệu chứng bằng ngôn ngữ bạn thoải mái nhất.</span>
+                </li>
+                <li>
+                  <span class="welcome-messages__lang">Русский</span>
+                  <span class="welcome-messages__text">Опишите симптомы на удобном для вас языке.</span>
+                </li>
+                <li>
+                  <span class="welcome-messages__lang">ภาษาไทย</span>
+                  <span class="welcome-messages__text">กรุณาอธิบายอาการด้วยภาษาที่คุณถนัด</span>
+                </li>
+                <li>
+                  <span class="welcome-messages__lang">Bahasa Indonesia</span>
+                  <span class="welcome-messages__text">Silakan jelaskan keluhan Anda dalam bahasa yang Anda kuasai.</span>
+                </li>
+                <li>
+                  <span class="welcome-messages__lang">中文</span>
+                  <span class="welcome-messages__text">请用您最熟悉的语言描述您的症状。</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 번역 본 화면 -->
+          <div id="translation-view" class="translation-view">
+            <div class="panel-header panel-header--compact">
+              <div class="panel-header-row">
+                <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
+                  <span class="detected-lang-badge__label">현재 감지된 언어:</span>
+                  <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
+                </div>
+              </div>
+            </div>
+            <div class="subtitle-stage">
+              <div id="subtitle-body" class="subtitle-body" role="region" aria-live="polite" aria-label="번역 자막">
+                <p id="subtitle-speaker" class="subtitle-speaker" aria-hidden="true"></p>
+                <p id="patient-text" class="subtitle-text is-empty">번역된 내용이 여기에 표시됩니다</p>
+                <div class="subtitle-waveform" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      var WS_URL = MediBridgeWs.getWebSocketUrl();
+
+      var welcomeScreen = document.getElementById("welcome-screen");
+      var translationView = document.getElementById("translation-view");
+      var patientText = document.getElementById("patient-text");
+      var subtitleSpeaker = document.getElementById("subtitle-speaker");
+      var detectedLangBadge = document.getElementById("detected-lang-badge");
+      var detectedLangValue = document.getElementById("detected-lang-value");
+      var connectionStatus = document.getElementById("connection-status");
+      var connectionStatusText = document.getElementById("connection-status-text");
+      var displayProcessing = document.getElementById("display-processing");
+      var recordingPrompt = document.getElementById("recording-prompt");
+      var subtitleBody = document.getElementById("subtitle-body");
+      var audioUnlockOverlay = document.getElementById("audio-unlock-overlay");
+      var btnAudioUnlock = document.getElementById("btn-audio-unlock");
+
+      var AUDIO_UNLOCK_KEY = "medibridge-audio-unlocked";
+      var SILENT_AUDIO_WAV =
+        "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
+      var languageLocked = false;
+      var audioUnlocked = false;
+      var ws = null;
+      var wsConnectPromise = null;
+      var unlockAudioEl = null;
+
+      var currentAudio = null;
+      var micStream = null;
+      var micRecorder = null;
+      var isRemoteRecording = false;
+      var micReady = false;
+
+      function blobToBase64(blob) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onloadend = function () {
+            var result = reader.result || "";
+            var base64 = result.split(",")[1] || "";
+            resolve(base64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function getSupportedMimeType() {
+        var types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+        for (var i = 0; i < types.length; i++) {
+          if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
+        }
+        return "";
+      }
+
+      function preparePatientMic() {
+        if (micStream && micReady) return Promise.resolve(micStream);
+        return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+          micStream = stream;
+          micReady = true;
+          return stream;
+        });
+      }
+
+      function sendPatientWs(payload) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("서버와 연결되어 있지 않습니다.");
+        ws.send(JSON.stringify(payload));
+      }
+
+      async function startRemotePatientRecording() {
+        if (isRemoteRecording || !isAudioUnlocked()) return;
+        await connectWebSocket();
+        await preparePatientMic();
+        var mimeType = getSupportedMimeType();
+        var options = mimeType ? { mimeType: mimeType } : undefined;
+        micRecorder = new MediaRecorder(micStream, options);
+        micRecorder.ondataavailable = async function (event) {
+          if (!event.data || event.data.size === 0) return;
+          try {
+            var b64 = await blobToBase64(event.data);
+            sendPatientWs({ type: "patient_audio", phase: "chunk", data: b64 });
+          } catch (err) {
+            console.error(err);
+          }
+        };
+        micRecorder.start(250);
+        isRemoteRecording = true;
+        hideProcessingOverlay();
+        showRecordingPrompt();
+        if (languageLocked) {
+          showTranslationScreen();
+        }
+      }
+
+      function stopRemotePatientRecording() {
+        if (!isRemoteRecording || !micRecorder) return;
+        isRemoteRecording = false;
+        hideRecordingPrompt();
+        showProcessingOverlay();
+        var recorder = micRecorder;
+        micRecorder = null;
+        recorder.onstop = function () {
+          try {
+            sendPatientWs({ type: "patient_audio", phase: "end" });
+          } catch (err) {
+            hideProcessingOverlay();
+            console.error(err);
+          }
+        };
+        if (recorder.state !== "inactive") recorder.stop();
+      }
+
+      function setConnectionStatus(state, text) {
+        connectionStatus.className = "status-badge";
+        if (state === "warn") connectionStatus.classList.add("status-badge--warn");
+        else if (state === "error") connectionStatus.classList.add("status-badge--error");
+        connectionStatusText.textContent = text;
+      }
+
+      function setDetectedBadge(state, valueText) {
+        detectedLangBadge.className = "detected-lang-badge detected-lang-badge--" + state;
+        detectedLangValue.textContent = valueText;
+      }
+
+      function stopPatientAudio() {
+        if (currentAudio) {
+          currentAudio.onended = null;
+          currentAudio.onerror = null;
+          currentAudio.pause();
+          currentAudio.removeAttribute("src");
+          currentAudio.load();
+          currentAudio = null;
+        }
+        if (subtitleBody) {
+          subtitleBody.classList.remove("is-audio-playing");
+        }
+      }
+
+      function showAudioPlayingVisual() {
+        if (subtitleBody) subtitleBody.classList.add("is-audio-playing");
+      }
+
+      function extractDisplayText(msg) {
+        var text = (msg.patient_text || "").trim();
+        if (text) return text;
+        if (msg.speaker === "doctor") {
+          return (msg.translated || msg.text || "").trim();
+        }
+        if (msg.speaker === "patient") {
+          return (msg.original || msg.translated || msg.text || "").trim();
+        }
+        return (msg.translated || msg.original || msg.text || "").trim();
+      }
+
+      function updateSubtitle(text, speaker) {
+        var display = (text || "").trim();
+        if (patientText) {
+          patientText.textContent = display || "번역된 내용이 여기에 표시됩니다";
+          patientText.classList.toggle("is-empty", !display);
+        }
+        if (subtitleSpeaker) {
+          if (speaker === "doctor" && display) {
+            subtitleSpeaker.textContent = "의사 선생님";
+            subtitleSpeaker.setAttribute("aria-hidden", "false");
+          } else if (speaker === "patient" && display) {
+            subtitleSpeaker.textContent = "환자님";
+            subtitleSpeaker.setAttribute("aria-hidden", "false");
+          } else {
+            subtitleSpeaker.textContent = "";
+            subtitleSpeaker.setAttribute("aria-hidden", "true");
+          }
+        }
+      }
+
+      function playAudioFromBase64(b64, mime) {
+        if (!b64) return;
+        stopPatientAudio();
+        var dataUrl = "data:" + (mime || "audio/mpeg") + ";base64," + b64;
+        currentAudio = new Audio(dataUrl);
+        currentAudio.onended = function () {
+          stopPatientAudio();
+        };
+        currentAudio.onerror = function () {
+          console.error("Audio playback failed");
+          stopPatientAudio();
+        };
+        showAudioPlayingVisual();
+        currentAudio.play().catch(function (err) {
+          console.error("Audio play() rejected", err);
+          stopPatientAudio();
+        });
+      }
+
+      function isAudioUnlocked() {
+        return audioUnlocked || localStorage.getItem(AUDIO_UNLOCK_KEY) === "true";
+      }
+
+      function hideAudioUnlockOverlay() {
+        if (!audioUnlockOverlay) return;
+        audioUnlockOverlay.classList.add("is-dismissed");
+        audioUnlockOverlay.setAttribute("aria-hidden", "true");
+      }
+
+      function showAudioUnlockOverlay() {
+        if (!audioUnlockOverlay) return;
+        audioUnlockOverlay.classList.remove("is-dismissed");
+        audioUnlockOverlay.setAttribute("aria-hidden", "false");
+        welcomeScreen.classList.add("is-hidden");
+        welcomeScreen.setAttribute("aria-hidden", "true");
+        translationView.classList.remove("is-visible");
+      }
+
+      function unlockPatientAudio() {
+        return new Promise(function (resolve) {
+          if (!unlockAudioEl) unlockAudioEl = new Audio(SILENT_AUDIO_WAV);
+          unlockAudioEl.volume = 0.01;
+          var done = function () {
+            audioUnlocked = true;
+            try {
+              localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
+            } catch (e) { /* ignore */ }
+            resolve();
+          };
+          var p = unlockAudioEl.play();
+          if (p && typeof p.then === "function") {
+            p.then(function () {
+              setTimeout(done, 120);
+            }).catch(done);
+          } else {
+            setTimeout(done, 120);
+          }
+        });
+      }
+
+      function showWelcomeScreen() {
+        if (!isAudioUnlocked()) {
+          showAudioUnlockOverlay();
+          return;
+        }
+        languageLocked = false;
+        stopPatientAudio();
+        if (isRemoteRecording) stopRemotePatientRecording();
+        hideProcessingOverlay();
+        hideRecordingPrompt();
+        hideAudioUnlockOverlay();
+        welcomeScreen.classList.remove("is-hidden");
+        welcomeScreen.setAttribute("aria-hidden", "false");
+        translationView.classList.remove("is-visible");
+        setDetectedBadge("idle", "자동 감지");
+        updateSubtitle("", null);
+      }
+
+      function showTranslationScreen(labelKo) {
+        languageLocked = true;
+        welcomeScreen.classList.add("is-hidden");
+        welcomeScreen.setAttribute("aria-hidden", "true");
+        translationView.classList.add("is-visible");
+        if (labelKo) setDetectedBadge("detected", labelKo);
+      }
+
+      function showProcessingOverlay() {
+        hideRecordingPrompt();
+        displayProcessing.classList.add("is-visible");
+        displayProcessing.setAttribute("aria-hidden", "false");
+      }
+
+      function hideProcessingOverlay() {
+        displayProcessing.classList.remove("is-visible");
+        displayProcessing.setAttribute("aria-hidden", "true");
+      }
+
+      function showRecordingPrompt() {
+        hideProcessingOverlay();
+        recordingPrompt.classList.add("is-visible");
+        recordingPrompt.setAttribute("aria-hidden", "false");
+      }
+
+      function hideRecordingPrompt() {
+        recordingPrompt.classList.remove("is-visible");
+        recordingPrompt.setAttribute("aria-hidden", "true");
+      }
+
+      function applySessionState(msg) {
+        if (!isAudioUnlocked()) return;
+        if (msg.language_locked && msg.session_lang) {
+          showTranslationScreen(msg.detected_language_label_ko || msg.session_lang);
+        } else {
+          showWelcomeScreen();
+        }
+      }
+
+      function connectWebSocket() {
+        if (ws && ws.readyState === WebSocket.OPEN) return Promise.resolve(ws);
+        if (wsConnectPromise) return wsConnectPromise;
+
+        wsConnectPromise = new Promise(function (resolve, reject) {
+          setConnectionStatus("warn", "서버 연결 중…");
+          var socket = new WebSocket(WS_URL);
+
+          socket.onopen = function () {
+            ws = socket;
+            wsConnectPromise = null;
+            socket.send(JSON.stringify({ type: "register", role: "display" }));
+            setConnectionStatus("ok", "연결됨");
+            resolve(socket);
+          };
+
+          socket.onmessage = function (event) {
+            handleServerMessage(JSON.parse(event.data));
+          };
+
+          socket.onerror = function () {
+            setConnectionStatus("error", "연결 실패");
+            reject(new Error("WebSocket failed"));
+          };
+
+          socket.onclose = function () {
+            ws = null;
+            wsConnectPromise = null;
+            setConnectionStatus("warn", "연결 끊김");
+            setTimeout(function () {
+              connectWebSocket().catch(function () {});
+            }, 3000);
+          };
+        });
+
+        return wsConnectPromise;
+      }
+
+      function handleServerMessage(msg) {
+        if (msg.type === "registered" || msg.type === "pong") return;
+
+        if (msg.type === "remote_patient_record") {
+          if (!isAudioUnlocked()) return;
+          if (msg.phase === "start") {
+            startRemotePatientRecording().catch(function (err) {
+              console.error("Remote recording start failed", err);
+              hideRecordingPrompt();
+              alert("마이크를 사용할 수 없습니다. 권한을 확인해 주세요.");
+            });
+          } else if (msg.phase === "stop") {
+            stopRemotePatientRecording();
+          }
+          return;
+        }
+
+        if (msg.type === "session_update") {
+          hideRecordingPrompt();
+          applySessionState(msg);
+          return;
+        }
+
+        if (msg.type === "reset" || msg.stop_audio) {
+          stopPatientAudio();
+          if (isRemoteRecording) {
+            isRemoteRecording = false;
+            if (micRecorder && micRecorder.state !== "inactive") {
+              try { micRecorder.stop(); } catch (e) { /* ignore */ }
+            }
+            micRecorder = null;
+          }
+          if (msg.type === "reset") {
+            hideProcessingOverlay();
+            hideRecordingPrompt();
+            showWelcomeScreen();
+          }
+          return;
+        }
+
+        if (msg.type === "processing") {
+          hideRecordingPrompt();
+          showProcessingOverlay();
+          if (languageLocked) {
+            setDetectedBadge("detecting", "처리 중…");
+          }
+          return;
+        }
+
+        if (msg.type === "error") {
+          hideProcessingOverlay();
+          hideRecordingPrompt();
+          return;
+        }
+
+        if (msg.type === "result") {
+          hideProcessingOverlay();
+          hideRecordingPrompt();
+          if (!isAudioUnlocked()) return;
+          showTranslationScreen(msg.detected_language_label_ko || null);
+          var displayText = extractDisplayText(msg);
+          updateSubtitle(displayText, msg.speaker);
+          if (msg.detected_language_label_ko && languageLocked) {
+            setDetectedBadge("detected", msg.detected_language_label_ko);
+          }
+          if (msg.speaker === "doctor" && msg.tts_audio_b64) {
+            playAudioFromBase64(msg.tts_audio_b64, msg.tts_mime || "audio/mpeg");
+          }
+        }
+      }
+
+      if (btnAudioUnlock) {
+        btnAudioUnlock.addEventListener("click", function () {
+          btnAudioUnlock.disabled = true;
+          unlockPatientAudio()
+            .then(function () { return preparePatientMic(); })
+            .then(function () {
+              hideAudioUnlockOverlay();
+              showWelcomeScreen();
+            })
+            .catch(function () {
+              btnAudioUnlock.disabled = false;
+              alert("스피커·마이크 권한을 허용해 주세요.");
+            });
+        });
+      }
+
+      if (isAudioUnlocked()) {
+        audioUnlocked = true;
+        hideAudioUnlockOverlay();
+        showWelcomeScreen();
+        preparePatientMic().catch(function () { /* 권한 재요청 필요 시 unlock UI */ });
+      } else {
+        showAudioUnlockOverlay();
+      }
+      connectWebSocket().catch(function () {});
+    })();
+  </script>
+</body>
+</html>

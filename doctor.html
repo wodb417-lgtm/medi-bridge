@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediBridge · 의사 (마스터)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="/static/common.css" />
+  <script src="/static/medibridge-ws.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">+</div>
+        <div>
+          <h1>MediBridge</h1>
+          <p>의사 마스터 화면 · 진료실 통제</p>
+        </div>
+      </div>
+      <div class="header__actions">
+        <button type="button" id="btn-settings" class="settings-btn" aria-label="단축키 설정" title="단축키 설정">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+          </svg>
+        </button>
+        <button type="button" id="btn-reset" class="reset-btn reset-btn--large">진료 종료 (초기화)</button>
+        <div id="connection-status" class="status-badge status-badge--warn">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="connection-status-text">서버 연결 중…</span>
+        </div>
+      </div>
+    </header>
+
+    <div id="mic-alert" class="mic-alert" role="alert" aria-live="assertive">
+      ⚠️ 마이크를 연결하고 권한을 허용해 주세요
+    </div>
+
+    <div class="lang-bar">
+      <span class="lang-bar__label">수동 언어 설정</span>
+      <span class="lang-bar__hint">선택 즉시 환자 언어가 고정됩니다 (자동 감지 전에도 사용 가능)</span>
+      <select id="language-select" class="language-select language-select--prominent" aria-label="수동 언어 설정">
+        <option value="" selected disabled>언어를 선택하세요</option>
+      </select>
+    </div>
+
+    <main class="panels-processing-wrap">
+      <div id="panels-processing" class="processing-overlay" aria-hidden="true">
+        <div class="processing-overlay__content">
+          <span class="processing-overlay__icon" aria-hidden="true">⏳</span>
+          <span class="processing-overlay__text">번역 중...</span>
+          <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+      </div>
+      <div class="panels">
+      <section class="panel panel--doctor" aria-label="의사 한국어">
+        <div class="panel-header">
+          <h2 class="panel-title">의사 (한국어)</h2>
+          <p class="panel-subtitle">의사·환자 발화의 한국어 내용</p>
+        </div>
+        <div class="translation-area">
+          <div class="translation-box">
+            <p id="doctor-text" class="translation-text is-empty">번역된 내용이 여기에 표시됩니다</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel--patient" aria-label="환자 외국어 미리보기">
+        <div class="panel-header">
+          <div class="panel-header-row">
+            <h2 id="patient-title" class="panel-title">환자 (자동 감지)</h2>
+            <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
+              <span class="detected-lang-badge__label">현재 감지된 언어:</span>
+              <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
+            </div>
+          </div>
+          <p id="patient-subtitle" class="panel-subtitle">환자 모니터에 표시될 외국어</p>
+        </div>
+        <div class="translation-area">
+          <div class="translation-box">
+            <p id="patient-text" class="translation-text is-empty">환자 화면에 표시될 번역문</p>
+          </div>
+        </div>
+      </section>
+      </div>
+    </main>
+
+    <footer class="master-controls">
+      <div class="master-controls__buttons">
+        <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="의사 말하기" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
+          </svg>
+          <span class="speak-btn__label">의사 말하기 <span id="doctor-shortcut-label" class="speak-btn__shortcut-label">(Spacebar)</span></span>
+        </button>
+        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
+          </svg>
+          <span class="speak-btn__label">환자 말하기 <span id="patient-shortcut-label" class="speak-btn__shortcut-label">(Alt)</span></span>
+        </button>
+      </div>
+    </footer>
+
+    <div id="settings-modal" class="settings-modal" aria-hidden="true" role="dialog" aria-labelledby="settings-modal-title">
+      <div class="settings-modal__backdrop" data-close-modal></div>
+      <div class="settings-modal__panel">
+        <h2 id="settings-modal-title" class="settings-modal__title">마이크 단축키 설정</h2>
+        <p class="settings-modal__desc">입력칸을 클릭한 뒤 원하는 키를 누르세요.</p>
+        <div class="settings-modal__field">
+          <label class="settings-modal__label" for="shortcut-doctor-input">의사 말하기 단축키</label>
+          <input type="text" id="shortcut-doctor-input" class="shortcut-input" readonly value="Spacebar" />
+        </div>
+        <div class="settings-modal__field">
+          <label class="settings-modal__label" for="shortcut-patient-input">환자 말하기 단축키</label>
+          <input type="text" id="shortcut-patient-input" class="shortcut-input" readonly value="Alt" />
+        </div>
+        <div class="settings-modal__actions">
+          <button type="button" id="btn-settings-save" class="settings-modal__btn settings-modal__btn--primary">저장</button>
+          <button type="button" id="btn-settings-close" class="settings-modal__btn settings-modal__btn--secondary" data-close-modal>닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var WS_URL = MediBridgeWs.getWebSocketUrl();
+
+      var doctorText = document.getElementById("doctor-text");
+      var patientText = document.getElementById("patient-text");
+      var btnDoctor = document.getElementById("btn-doctor");
+      var btnPatient = document.getElementById("btn-patient");
+      var btnReset = document.getElementById("btn-reset");
+      var patientTitle = document.getElementById("patient-title");
+      var patientSubtitle = document.getElementById("patient-subtitle");
+      var languageSelect = document.getElementById("language-select");
+      var detectedLangBadge = document.getElementById("detected-lang-badge");
+      var detectedLangValue = document.getElementById("detected-lang-value");
+      var connectionStatus = document.getElementById("connection-status");
+      var connectionStatusText = document.getElementById("connection-status-text");
+      var micAlert = document.getElementById("mic-alert");
+      var panelsProcessing = document.getElementById("panels-processing");
+
+      var sessionLangCode = null;
+      var isLanguageLocked = false;
+
+      var ws = null;
+      var wsConnectPromise = null;
+      var mediaRecorder = null;
+      var audioStream = null;
+      var activeSpeaker = null;
+      var activeButton = null;
+      var isRecording = false;
+      var isProcessing = false;
+      var doctorKeyHeld = false;
+      var patientKeyHeld = false;
+
+      var SHORTCUTS_STORAGE_KEY = "medibridge-shortcuts";
+      var DEFAULT_SHORTCUTS = {
+        doctor: { code: "Space", key: " ", label: "Spacebar" },
+        patient: { code: "AltLeft", key: "Alt", label: "Alt" },
+      };
+      var shortcuts = { doctor: null, patient: null };
+
+      var btnSettings = document.getElementById("btn-settings");
+      var settingsModal = document.getElementById("settings-modal");
+      var shortcutDoctorInput = document.getElementById("shortcut-doctor-input");
+      var shortcutPatientInput = document.getElementById("shortcut-patient-input");
+      var btnSettingsSave = document.getElementById("btn-settings-save");
+      var btnSettingsClose = document.getElementById("btn-settings-close");
+      var doctorShortcutLabel = document.getElementById("doctor-shortcut-label");
+      var patientShortcutLabel = document.getElementById("patient-shortcut-label");
+
+      var pendingShortcuts = { doctor: null, patient: null };
+      var capturingInput = null;
+
+      var languages = [
+        { code: "en", labelKo: "영어", labelFull: "영어 (English)", subtitle: "Speak and it will be translated for the doctor" },
+        { code: "vi", labelKo: "베트남어", labelFull: "베트남어 (Tiếng Việt)", subtitle: "Nói và nội dung sẽ được dịch cho bác sĩ" },
+        { code: "zh", labelKo: "중국어", labelFull: "중국어 (中文)", subtitle: "说话内容将翻译给医生" },
+        { code: "th", labelKo: "태국어", labelFull: "태국어 (ภาษาไทย)", subtitle: "พูดแล้วจะแปลให้แพทย์ฟัง" },
+        { code: "uz", labelKo: "우즈베크어", labelFull: "우즈베크어 (O'zbek)", subtitle: "Gapiring, shifokor uchun tarjima qilinadi" },
+        { code: "id", labelKo: "인도네시아어", labelFull: "인도네시아어 (Bahasa Indonesia)", subtitle: "Bicara dan akan diterjemahkan untuk dokter" },
+        { code: "km", labelKo: "캄보디아어", labelFull: "캄보디아어 (ខ្មែរ)", subtitle: "និយាយ ហើយនឹងបកប្រែទៅឱ្យគ្រូពេទ្យ" },
+        { code: "ne", labelKo: "네팔어", labelFull: "네팔어 (नेपाली)", subtitle: "बोल्नुहोस्, डाक्टरका लागि अनुवाद हुनेछ" },
+        { code: "tl", labelKo: "타갈로그어", labelFull: "타갈로그어 (Tagalog)", subtitle: "Magsalita at isasalin ito para sa doktor" },
+        { code: "ru", labelKo: "러시아어", labelFull: "러시아어 (Русский)", subtitle: "Говорите — перевод будет показан врачу" },
+      ];
+
+      languages.forEach(function (lang) {
+        var option = document.createElement("option");
+        option.value = lang.code;
+        option.textContent = lang.labelFull;
+        languageSelect.appendChild(option);
+      });
+
+      function getLangByCode(code) {
+        for (var i = 0; i < languages.length; i++) {
+          if (languages[i].code === code) return languages[i];
+        }
+        return languages[0];
+      }
+
+      function setConnectionStatus(state, text) {
+        connectionStatus.className = "status-badge";
+        if (state === "warn") connectionStatus.classList.add("status-badge--warn");
+        else if (state === "error") connectionStatus.classList.add("status-badge--error");
+        connectionStatusText.textContent = text;
+      }
+
+      function setDetectedBadge(state, valueText) {
+        detectedLangBadge.className = "detected-lang-badge detected-lang-badge--" + state;
+        detectedLangValue.textContent = valueText;
+      }
+
+      function applyUnlockedUI() {
+        isLanguageLocked = false;
+        sessionLangCode = null;
+        patientTitle.textContent = "환자 (자동 감지 대기)";
+        patientSubtitle.textContent = "환자 모니터: 다국어 대기 화면";
+        if (!isRecording && !isProcessing) setDetectedBadge("idle", "자동 감지");
+      }
+
+      function applyLockedLanguageUI(code, labelKo, isManual) {
+        isLanguageLocked = true;
+        sessionLangCode = code;
+        var lang = getLangByCode(code);
+        patientTitle.textContent = "환자 (" + labelKo + ")";
+        patientSubtitle.textContent = isManual
+          ? lang.subtitle + " · 수동 고정"
+          : lang.subtitle + " · 음성 감지";
+        setDetectedBadge(isManual ? "manual" : "detected", labelKo);
+      }
+
+      function onLanguageSelectChange() {
+        var code = languageSelect.value;
+        if (!code) return;
+        connectWebSocket().then(function () {
+          sendWs({ type: "set_language", lang_code: code });
+        }).catch(function () {
+          alert("서버에 연결할 수 없습니다.");
+        });
+      }
+
+      languageSelect.addEventListener("change", onLanguageSelectChange);
+      applyUnlockedUI();
+
+      function setText(el, text) {
+        el.textContent = text;
+        el.classList.toggle("is-empty", !text);
+      }
+
+      function clearAllTexts() {
+        setText(doctorText, "");
+        setText(patientText, "");
+        doctorText.textContent = "번역된 내용이 여기에 표시됩니다";
+        patientText.textContent = "환자 화면에 표시될 번역문";
+        doctorText.classList.add("is-empty");
+        patientText.classList.add("is-empty");
+        languageSelect.selectedIndex = 0;
+        applyUnlockedUI();
+      }
+
+      function showMicAlert() {
+        micAlert.classList.add("is-visible");
+      }
+
+      function hideMicAlert() {
+        micAlert.classList.remove("is-visible");
+      }
+
+      function showProcessingOverlay() {
+        panelsProcessing.classList.add("is-visible");
+        panelsProcessing.setAttribute("aria-hidden", "false");
+      }
+
+      function hideProcessingOverlay() {
+        panelsProcessing.classList.remove("is-visible");
+        panelsProcessing.setAttribute("aria-hidden", "true");
+      }
+
+      function setRecordingButton(btn, recording) {
+        btn.classList.toggle("is-recording", recording);
+        btn.setAttribute("aria-pressed", recording ? "true" : "false");
+        var labelEl = btn.querySelector(".speak-btn__label");
+        if (labelEl) {
+          labelEl.textContent = recording
+            ? "녹음 중..."
+            : btn.getAttribute("data-default-label") || labelEl.textContent;
+        }
+      }
+
+      function checkMicrophoneAccess() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showMicAlert();
+          return Promise.reject(new Error("Microphone not supported"));
+        }
+        return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+          stream.getTracks().forEach(function (t) { t.stop(); });
+          hideMicAlert();
+        }).catch(function () {
+          showMicAlert();
+          throw new Error("Microphone permission denied");
+        });
+      }
+
+      function isMicError(err) {
+        if (!err) return true;
+        var name = err.name || "";
+        return (
+          name === "NotAllowedError" ||
+          name === "NotFoundError" ||
+          name === "NotReadableError" ||
+          name === "SecurityError" ||
+          name === "AbortError"
+        );
+      }
+
+      function connectWebSocket() {
+        if (ws && ws.readyState === WebSocket.OPEN) return Promise.resolve(ws);
+        if (wsConnectPromise) return wsConnectPromise;
+
+        wsConnectPromise = new Promise(function (resolve, reject) {
+          setConnectionStatus("warn", "서버 연결 중…");
+          var socket = new WebSocket(WS_URL);
+
+          socket.onopen = function () {
+            ws = socket;
+            wsConnectPromise = null;
+            socket.send(JSON.stringify({ type: "register", role: "doctor" }));
+            setConnectionStatus("ok", "서버 연결됨");
+            resolve(socket);
+          };
+
+          socket.onmessage = function (event) {
+            handleServerMessage(JSON.parse(event.data));
+          };
+
+          socket.onerror = function () {
+            setConnectionStatus("error", "서버 연결 실패");
+            reject(new Error("WebSocket connection failed"));
+          };
+
+          socket.onclose = function () {
+            ws = null;
+            wsConnectPromise = null;
+            if (!isRecording && !isProcessing) setConnectionStatus("warn", "서버 연결 끊김");
+          };
+        });
+
+        return wsConnectPromise;
+      }
+
+      connectWebSocket().catch(function () {});
+      checkMicrophoneAccess().catch(function () {});
+
+      function blobToBase64(blob) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onloadend = function () {
+            var parts = reader.result.split(",");
+            resolve(parts[1] || "");
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      function getSupportedMimeType() {
+        var types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+        for (var i = 0; i < types.length; i++) {
+          if (MediaRecorder.isTypeSupported(types[i])) return types[i];
+        }
+        return "";
+      }
+
+      function sendWs(payload) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("서버와 연결되어 있지 않습니다.");
+        ws.send(JSON.stringify(payload));
+      }
+
+      function buildSessionMeta(speaker) {
+        return { type: "start", speaker: speaker };
+      }
+
+      async function startDoctorRecording(btn) {
+        if (isProcessing || isRecording) return;
+
+        await connectWebSocket();
+        activeSpeaker = "doctor";
+        activeButton = btn;
+
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        var mimeType = getSupportedMimeType();
+        var options = mimeType ? { mimeType: mimeType } : undefined;
+        mediaRecorder = new MediaRecorder(audioStream, options);
+
+        mediaRecorder.ondataavailable = async function (event) {
+          if (!event.data || event.data.size === 0) return;
+          try {
+            var b64 = await blobToBase64(event.data);
+            sendWs({ type: "chunk", data: b64, mime: mimeType || "audio/webm" });
+          } catch (err) {
+            console.error(err);
+          }
+        };
+
+        sendWs(buildSessionMeta("doctor"));
+        mediaRecorder.start(250);
+        isRecording = true;
+        setRecordingButton(btn, true);
+        hideProcessingOverlay();
+      }
+
+      function stopDoctorRecording() {
+        if (!mediaRecorder || !isRecording || activeSpeaker !== "doctor") return;
+
+        isRecording = false;
+        isProcessing = true;
+        if (activeButton) setRecordingButton(activeButton, false);
+        showProcessingOverlay();
+
+        var recorder = mediaRecorder;
+        mediaRecorder = null;
+
+        recorder.onstop = function () {
+          if (audioStream) {
+            audioStream.getTracks().forEach(function (t) { t.stop(); });
+            audioStream = null;
+          }
+          try {
+            sendWs({ type: "end" });
+          } catch (err) {
+            isProcessing = false;
+            hideProcessingOverlay();
+            alert(err.message || "전송에 실패했습니다.");
+          }
+        };
+
+        if (recorder.state !== "inactive") recorder.stop();
+      }
+
+      var patientRemoteActive = false;
+
+      function beginPatientRemote(btn) {
+        if (isProcessing || isRecording || patientRemoteActive) return;
+        connectWebSocket().then(function () {
+          patientRemoteActive = true;
+          activeSpeaker = "patient";
+          activeButton = btn;
+          setRecordingButton(btn, true);
+          setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
+          sendWs({ action: "start_patient_record" });
+        }).catch(function () {
+          alert("서버에 연결할 수 없습니다.");
+        });
+      }
+
+      function endPatientRemote() {
+        if (!patientRemoteActive) return;
+        patientRemoteActive = false;
+        isProcessing = true;
+        if (activeButton) setRecordingButton(activeButton, false);
+        showProcessingOverlay();
+        setDetectedBadge("detecting", "처리 중…");
+        try {
+          sendWs({ action: "stop_patient_record" });
+        } catch (err) {
+          isProcessing = false;
+          hideProcessingOverlay();
+          alert(err.message || "전송에 실패했습니다.");
+        }
+        activeSpeaker = null;
+        activeButton = null;
+      }
+
+      function handleServerMessage(msg) {
+        if (msg.type === "registered" || msg.type === "ready" || msg.type === "pong") return;
+
+        if (msg.type === "session_update") {
+          if (msg.language_locked && msg.session_lang) {
+            applyLockedLanguageUI(
+              msg.session_lang,
+              msg.detected_language_label_ko,
+              !!msg.manual
+            );
+            var opts = languageSelect.options;
+            for (var i = 0; i < opts.length; i++) {
+              if (opts[i].value === msg.session_lang) {
+                languageSelect.selectedIndex = i;
+                break;
+              }
+            }
+          } else {
+            languageSelect.selectedIndex = 0;
+            applyUnlockedUI();
+          }
+          return;
+        }
+
+        if (msg.type === "reset") {
+          isProcessing = false;
+          patientRemoteActive = false;
+          activeSpeaker = null;
+          activeButton = null;
+          hideProcessingOverlay();
+          clearAllTexts();
+          if (btnPatient) setRecordingButton(btnPatient, false);
+          return;
+        }
+
+        if (msg.type === "processing") {
+          isProcessing = true;
+          showProcessingOverlay();
+          if (msg.speaker === "patient") setDetectedBadge("detecting", "처리 중…");
+          return;
+        }
+
+        if (msg.type === "error") {
+          isProcessing = false;
+          activeSpeaker = null;
+          activeButton = null;
+          hideProcessingOverlay();
+          alert(msg.message || "처리 중 오류가 발생했습니다.");
+          return;
+        }
+
+        if (msg.type === "result") {
+          isProcessing = false;
+          hideProcessingOverlay();
+          setText(doctorText, msg.doctor_text || "");
+          setText(patientText, msg.patient_text || "");
+
+          if (msg.language_locked && msg.session_lang && msg.detected_language_label_ko) {
+            applyLockedLanguageUI(
+              msg.session_lang,
+              msg.detected_language_label_ko,
+              !!msg.manual
+            );
+          }
+
+          activeSpeaker = null;
+          activeButton = null;
+        }
+      }
+
+      function beginDoctorSpeak(btn) {
+        if (isProcessing) return;
+        if (isRecording || patientRemoteActive) return;
+        startDoctorRecording(btn).catch(function (err) {
+          isRecording = false;
+          isProcessing = false;
+          setRecordingButton(btn, false);
+          hideProcessingOverlay();
+          if (isMicError(err)) {
+            showMicAlert();
+          } else {
+            alert(err.message || "마이크를 사용할 수 없습니다. 브라우저 권한을 확인해 주세요.");
+          }
+        });
+      }
+
+      function endDoctorSpeak() {
+        if (isRecording && activeSpeaker === "doctor") stopDoctorRecording();
+      }
+
+      btnDoctor.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        beginDoctorSpeak(btnDoctor);
+      });
+
+      btnPatient.addEventListener("mousedown", function (e) {
+        e.preventDefault();
+        beginPatientRemote(btnPatient);
+      });
+
+      window.addEventListener("mouseup", function () {
+        endDoctorSpeak();
+        endPatientRemote();
+      });
+
+      btnReset.addEventListener("click", function () {
+        connectWebSocket().then(function () {
+          sendWs({ type: "reset" });
+        }).catch(function () {
+          alert("서버에 연결할 수 없습니다.");
+        });
+      });
+
+      function isTypingTarget(el) {
+        if (!el) return false;
+        if (el === shortcutDoctorInput || el === shortcutPatientInput) return true;
+        var tag = el.tagName;
+        return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+      }
+
+      function formatKeyLabel(e) {
+        if (e.key === " ") return "Spacebar";
+        if (e.key === "Control") return "Ctrl";
+        if (e.key === "Alt") return "Alt";
+        if (e.key === "Shift") return "Shift";
+        if (e.key === "Meta") return "Meta";
+        if (e.key === "Escape") return "Esc";
+        if (e.key === "ArrowUp") return "↑";
+        if (e.key === "ArrowDown") return "↓";
+        if (e.key === "ArrowLeft") return "←";
+        if (e.key === "ArrowRight") return "→";
+        if (e.key === "Enter") return "Enter";
+        if (e.key === "Tab") return "Tab";
+        if (e.key === "Backspace") return "Backspace";
+        if (e.key === "Delete") return "Delete";
+        if (e.key.length === 1) return e.key.toUpperCase();
+        return e.key;
+      }
+
+      function bindingFromEvent(e) {
+        return { code: e.code, key: e.key, label: formatKeyLabel(e) };
+      }
+
+      function cloneBinding(binding) {
+        return { code: binding.code, key: binding.key, label: binding.label };
+      }
+
+      function loadShortcutsFromStorage() {
+        try {
+          var raw = localStorage.getItem(SHORTCUTS_STORAGE_KEY);
+          if (!raw) {
+            return {
+              doctor: cloneBinding(DEFAULT_SHORTCUTS.doctor),
+              patient: cloneBinding(DEFAULT_SHORTCUTS.patient),
+            };
+          }
+          var parsed = JSON.parse(raw);
+          var doctor = parsed.doctor && parsed.doctor.code ? parsed.doctor : DEFAULT_SHORTCUTS.doctor;
+          var patient = parsed.patient && parsed.patient.key ? parsed.patient : DEFAULT_SHORTCUTS.patient;
+          return { doctor: cloneBinding(doctor), patient: cloneBinding(patient) };
+        } catch (err) {
+          return {
+            doctor: cloneBinding(DEFAULT_SHORTCUTS.doctor),
+            patient: cloneBinding(DEFAULT_SHORTCUTS.patient),
+          };
+        }
+      }
+
+      function saveShortcutsToStorage() {
+        localStorage.setItem(
+          SHORTCUTS_STORAGE_KEY,
+          JSON.stringify({ doctor: shortcuts.doctor, patient: shortcuts.patient })
+        );
+      }
+
+      function updateShortcutLabels() {
+        if (doctorShortcutLabel) doctorShortcutLabel.textContent = "(" + shortcuts.doctor.label + ")";
+        if (patientShortcutLabel) patientShortcutLabel.textContent = "(" + shortcuts.patient.label + ")";
+      }
+
+      function syncModalInputsFromPending() {
+        shortcutDoctorInput.value = pendingShortcuts.doctor.label;
+        shortcutPatientInput.value = pendingShortcuts.patient.label;
+      }
+
+      function applyShortcuts(loaded) {
+        shortcuts.doctor = loaded.doctor;
+        shortcuts.patient = loaded.patient;
+        updateShortcutLabels();
+      }
+
+      function keyMatches(e, binding) {
+        if (!binding) return false;
+        if (binding.code && e.code === binding.code) return true;
+        if (binding.key && e.key === binding.key) return true;
+        return false;
+      }
+
+      function openSettingsModal() {
+        pendingShortcuts.doctor = cloneBinding(shortcuts.doctor);
+        pendingShortcuts.patient = cloneBinding(shortcuts.patient);
+        syncModalInputsFromPending();
+        settingsModal.classList.add("is-open");
+        settingsModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeSettingsModal() {
+        settingsModal.classList.remove("is-open");
+        settingsModal.setAttribute("aria-hidden", "true");
+        capturingInput = null;
+        shortcutDoctorInput.classList.remove("is-capturing");
+        shortcutPatientInput.classList.remove("is-capturing");
+      }
+
+      function startCapture(input, role) {
+        capturingInput = { input: input, role: role };
+        shortcutDoctorInput.classList.toggle("is-capturing", input === shortcutDoctorInput);
+        shortcutPatientInput.classList.toggle("is-capturing", input === shortcutPatientInput);
+        input.focus();
+        input.value = "키를 눌러 주세요…";
+      }
+
+      applyShortcuts(loadShortcutsFromStorage());
+
+      btnSettings.addEventListener("click", openSettingsModal);
+      btnSettingsClose.addEventListener("click", closeSettingsModal);
+      settingsModal.querySelectorAll("[data-close-modal]").forEach(function (el) {
+        el.addEventListener("click", closeSettingsModal);
+      });
+
+      shortcutDoctorInput.addEventListener("click", function () {
+        startCapture(shortcutDoctorInput, "doctor");
+      });
+      shortcutPatientInput.addEventListener("click", function () {
+        startCapture(shortcutPatientInput, "patient");
+      });
+
+      function handleShortcutCapture(e) {
+        if (!capturingInput) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === "Escape") {
+          syncModalInputsFromPending();
+          capturingInput = null;
+          shortcutDoctorInput.classList.remove("is-capturing");
+          shortcutPatientInput.classList.remove("is-capturing");
+          return;
+        }
+        var binding = bindingFromEvent(e);
+        pendingShortcuts[capturingInput.role] = binding;
+        capturingInput.input.value = binding.label;
+        capturingInput = null;
+        shortcutDoctorInput.classList.remove("is-capturing");
+        shortcutPatientInput.classList.remove("is-capturing");
+      }
+
+      shortcutDoctorInput.addEventListener("keydown", handleShortcutCapture);
+      shortcutPatientInput.addEventListener("keydown", handleShortcutCapture);
+
+      btnSettingsSave.addEventListener("click", function () {
+        shortcuts.doctor = cloneBinding(pendingShortcuts.doctor);
+        shortcuts.patient = cloneBinding(pendingShortcuts.patient);
+        saveShortcutsToStorage();
+        updateShortcutLabels();
+        closeSettingsModal();
+      });
+
+      window.addEventListener("keydown", function (e) {
+        if (settingsModal.classList.contains("is-open")) {
+          if (e.key === "Escape") closeSettingsModal();
+          return;
+        }
+        if (isTypingTarget(e.target)) return;
+
+        if (keyMatches(e, shortcuts.doctor) && !e.repeat) {
+          e.preventDefault();
+          if (!doctorKeyHeld) {
+            doctorKeyHeld = true;
+            beginDoctorSpeak(btnDoctor);
+          }
+        }
+
+        if (keyMatches(e, shortcuts.patient) && !e.repeat) {
+          e.preventDefault();
+          if (!patientKeyHeld) {
+            patientKeyHeld = true;
+            beginPatientRemote(btnPatient);
+          }
+        }
+      });
+
+      window.addEventListener("keyup", function (e) {
+        if (settingsModal.classList.contains("is-open")) return;
+        if (isTypingTarget(e.target)) return;
+
+        if (keyMatches(e, shortcuts.doctor)) {
+          doctorKeyHeld = false;
+          endDoctorSpeak();
+        }
+        if (keyMatches(e, shortcuts.patient)) {
+          patientKeyHeld = false;
+          endPatientRemote();
+        }
+      });
+
+      window.addEventListener("blur", function () {
+        doctorKeyHeld = false;
+        patientKeyHeld = false;
+        endDoctorSpeak();
+        endPatientRemote();
+      });
+    })();
+  </script>
+</body>
+</html>
