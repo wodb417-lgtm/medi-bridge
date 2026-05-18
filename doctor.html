@@ -6,10 +6,11 @@
   <title>MediBridge · 의사 (마스터)</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
+  <link rel="stylesheet" href="/static/medical-minimal.css" />
   <script src="/static/medibridge-ws.js"></script>
 </head>
-<body class="doctor-master">
-  <div class="app doctor-master__app">
+<body class="doctor-master medibridge-ui">
+  <div class="app">
     <header class="header">
       <div class="brand">
         <div class="brand-icon" aria-hidden="true">+</div>
@@ -19,8 +20,8 @@
         </div>
       </div>
       <div class="header__actions">
-        <div class="dept-select-wrap">
-          <label for="department-select" class="dept-select__label">진료과</label>
+        <div class="dept-select-wrap dept-select-wrap--corner">
+          <label for="department-select" class="dept-select__label">과</label>
           <select id="department-select" class="department-select" aria-label="진료과 선택">
             <option value="internal" selected>내과</option>
             <option value="ortho">정형외과</option>
@@ -41,7 +42,7 @@
     </header>
 
     <div id="mic-alert" class="mic-alert" role="alert" aria-live="assertive">
-      ⚠️ 마이크를 연결하고 권한을 허용해 주세요
+      마이크를 연결하고 권한을 허용해 주세요
     </div>
 
     <div class="lang-bar">
@@ -55,23 +56,21 @@
     <main class="panels-processing-wrap">
       <div id="panels-patient-remote" class="doctor-patient-remote-overlay" aria-hidden="true">
         <div class="doctor-patient-remote-overlay__content">
-          <span class="doctor-patient-remote-overlay__icon" aria-hidden="true">🎙️</span>
-          <span class="doctor-patient-remote-overlay__text">환자가 태블릿에 말씀하시는 중...</span>
+          <span class="doctor-patient-remote-overlay__text">환자 태블릿 녹음 중</span>
           <span class="doctor-patient-remote-overlay__dots" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
       </div>
       <div id="panels-processing" class="processing-overlay" aria-hidden="true">
         <div class="processing-overlay__content">
-          <span class="processing-overlay__icon" aria-hidden="true">⏳</span>
-          <span class="processing-overlay__text">번역 중...</span>
+          <span class="processing-overlay__text">번역 중</span>
           <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
       </div>
       <div class="panels">
       <section class="panel panel--doctor" aria-label="의사 한국어">
         <div class="panel-header">
-          <h2 class="panel-title">의사 (한국어)</h2>
-          <p class="panel-subtitle">의사·환자 발화의 한국어 내용</p>
+          <h2 class="panel-title">한국어 · 의사</h2>
+          <p class="panel-subtitle">진료실 대화의 한국어 기록</p>
         </div>
         <div class="translation-area">
           <div class="translation-box">
@@ -83,13 +82,13 @@
       <section class="panel panel--patient" aria-label="환자 외국어 미리보기">
         <div class="panel-header">
           <div class="panel-header-row">
-            <h2 id="patient-title" class="panel-title">환자 (자동 감지)</h2>
+            <h2 id="patient-title" class="panel-title">외국어 · 환자</h2>
             <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
               <span class="detected-lang-badge__label">현재 감지된 언어:</span>
               <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
             </div>
           </div>
-          <p id="patient-subtitle" class="panel-subtitle">환자 모니터에 표시될 외국어</p>
+          <p id="patient-subtitle" class="panel-subtitle">환자 태블릿에 표시될 번역문</p>
         </div>
         <div class="translation-area">
           <div class="translation-box">

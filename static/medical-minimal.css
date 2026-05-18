@@ -1,0 +1,600 @@
+/**
+ * MediBridge — Minimal Medical UI
+ * Navy #002855 · White #FFFFFF · Accent #0056B3
+ */
+
+:root {
+  --mb-navy: #002855;
+  --mb-white: #ffffff;
+  --mb-accent: #0056b3;
+  --mb-surface: #f8fafc;
+  --mb-border: #e2e8f0;
+  --mb-text-muted: #475569;
+  --mb-text-soft: #64748b;
+
+  --bg-page: var(--mb-surface);
+  --bg-card: var(--mb-white);
+  --text-primary: var(--mb-navy);
+  --text-secondary: var(--mb-text-muted);
+  --text-tertiary: var(--mb-text-soft);
+  --border-subtle: var(--mb-border);
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --radius-card: 8px;
+  --radius-btn: 6px;
+  --radius-pill: 4px;
+  --blue-start: var(--mb-accent);
+  --blue-end: var(--mb-accent);
+  --doctor-text: var(--mb-navy);
+  --patient-text: var(--mb-navy);
+}
+
+html,
+body {
+  font-family: "Pretendard", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--mb-surface);
+  color: var(--mb-navy);
+}
+
+/* ─── Header: flat clinical bar ─── */
+.header {
+  background: var(--mb-white);
+  border-bottom: 1px solid var(--mb-border);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  padding: 0.75rem 1.25rem;
+  position: relative;
+}
+
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--mb-navy);
+  border-radius: 4px;
+  box-shadow: none;
+  font-size: 1rem;
+}
+
+.brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--mb-navy);
+  letter-spacing: -0.02em;
+}
+
+.brand p {
+  font-size: 0.75rem;
+  color: var(--mb-text-muted);
+  font-weight: 400;
+}
+
+.header__actions {
+  gap: 0.5rem;
+}
+
+/* 진료과: 작고 정갈하게 구석 */
+.dept-select-wrap {
+  order: -1;
+  padding: 0.2rem 0.5rem;
+  background: var(--mb-white);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  box-shadow: none;
+  gap: 0.35rem;
+}
+
+.dept-select-wrap--corner {
+  margin-right: 0.5rem;
+}
+
+body.doctor-master .header {
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+
+body.doctor-master .header__actions {
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dept-select__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--mb-text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.department-select {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--mb-navy);
+  min-width: 5rem;
+  padding: 0.15rem 1.25rem 0.15rem 0;
+}
+
+.settings-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  border: 1px solid var(--mb-border);
+  box-shadow: none;
+  color: var(--mb-text-muted);
+}
+
+.settings-btn:hover {
+  background: var(--mb-surface);
+  color: var(--mb-navy);
+  transform: none;
+  box-shadow: none;
+}
+
+.reset-btn,
+.reset-btn--large {
+  background: var(--mb-white);
+  color: var(--mb-navy);
+  border: 1px solid var(--mb-border);
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 0.75rem;
+  padding: 0.45rem 0.75rem;
+}
+
+.reset-btn:hover,
+.reset-btn--large:hover {
+  background: var(--mb-surface);
+  border-color: var(--mb-accent);
+  color: var(--mb-accent);
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.status-badge {
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.35rem 0.6rem;
+  background: var(--mb-surface);
+  color: var(--mb-text-muted);
+  border: 1px solid var(--mb-border);
+}
+
+.status-badge--ok {
+  background: var(--mb-white);
+  color: var(--mb-accent);
+  border-color: var(--mb-border);
+}
+
+.status-badge--warn {
+  background: var(--mb-white);
+  color: var(--mb-text-muted);
+}
+
+.status-dot {
+  animation: none;
+  box-shadow: none;
+  width: 6px;
+  height: 6px;
+}
+
+.status-badge--ok .status-dot {
+  background: var(--mb-accent);
+}
+
+/* ─── Lang bar: minimal strip ─── */
+.lang-bar {
+  background: var(--mb-white);
+  border-bottom: 1px solid var(--mb-border);
+  box-shadow: none;
+  padding: 0.65rem 1.25rem;
+  gap: 0.4rem;
+}
+
+.lang-bar__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--mb-navy);
+}
+
+.lang-bar__hint {
+  font-size: 0.6875rem;
+  color: var(--mb-text-soft);
+}
+
+.language-select--prominent {
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  max-width: 280px;
+}
+
+.language-select:focus {
+  border-color: var(--mb-accent);
+  box-shadow: 0 0 0 2px rgba(0, 86, 179, 0.15);
+}
+
+/* ─── Doctor: 좌우 대비 패널 ─── */
+.panels {
+  gap: 1px;
+  padding: 0;
+  background: var(--mb-border);
+}
+
+.panel {
+  background: var(--mb-white);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  transition: none;
+}
+
+.panel:hover {
+  box-shadow: none;
+}
+
+.panel--doctor::before,
+.panel--patient::before {
+  height: 3px;
+  background: var(--mb-navy);
+}
+
+.panel--patient::before {
+  background: var(--mb-accent);
+}
+
+.panel-header {
+  padding: 1rem 1.25rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid var(--mb-border);
+  background: var(--mb-surface);
+}
+
+.panel-title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mb-navy);
+}
+
+.panel-subtitle {
+  font-size: 0.75rem;
+  color: var(--mb-text-soft);
+  margin-top: 0.25rem;
+  text-align: left;
+}
+
+.panel-header-row {
+  align-items: flex-start;
+}
+
+.detected-lang-badge {
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--mb-white);
+  border: 1px solid var(--mb-border);
+  box-shadow: none;
+}
+
+.detected-lang-badge--detected,
+.detected-lang-badge--manual {
+  background: var(--mb-white);
+  color: var(--mb-accent);
+  border-color: var(--mb-border);
+  box-shadow: none;
+}
+
+.translation-area {
+  padding: 1rem 1.25rem 1.25rem;
+  background: var(--mb-surface);
+}
+
+.translation-box {
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 1.5rem 1.25rem;
+  min-height: 100%;
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.panel:hover .translation-box {
+  border-color: var(--mb-border);
+  box-shadow: none;
+}
+
+.translation-text {
+  font-size: clamp(1.375rem, 2.2vw, 1.75rem);
+  font-weight: 600;
+  line-height: 1.55;
+  letter-spacing: -0.02em;
+  text-align: left;
+  width: 100%;
+}
+
+.translation-text.is-empty {
+  font-size: 0.9375rem;
+  font-weight: 400;
+  color: var(--mb-text-soft);
+}
+
+.panel--doctor .translation-text:not(.is-empty),
+.panel--patient .translation-text:not(.is-empty) {
+  color: var(--mb-navy);
+}
+
+/* ─── Footer controls: flat ─── */
+.master-controls {
+  background: var(--mb-white);
+  border-top: 1px solid var(--mb-border);
+  padding: 0.75rem 1.25rem 1rem;
+}
+
+.speak-btn {
+  border-radius: var(--radius-btn);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  padding: 0.85rem 1rem;
+  box-shadow: none;
+  transform: none;
+}
+
+.speak-btn:hover,
+.speak-btn:active {
+  transform: none;
+  filter: none;
+}
+
+.speak-btn--doctor {
+  background: var(--mb-navy);
+  color: var(--mb-white);
+  box-shadow: none;
+}
+
+.speak-btn--doctor:hover {
+  background: var(--mb-accent);
+  box-shadow: none;
+}
+
+.speak-btn--patient {
+  background: var(--mb-white);
+  color: var(--mb-navy);
+  border: 1px solid var(--mb-navy);
+  box-shadow: none;
+}
+
+.speak-btn--patient:hover {
+  background: var(--mb-surface);
+  border-color: var(--mb-accent);
+  color: var(--mb-accent);
+  box-shadow: none;
+}
+
+.speak-btn.is-listening,
+.speak-btn--doctor.is-listening,
+.speak-btn--patient.is-listening {
+  animation: none;
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
+}
+
+.speak-btn svg {
+  width: 20px;
+  height: 20px;
+  filter: none;
+}
+
+.speak-btn__shortcut-label,
+.speak-btn__hint {
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+/* ─── Overlays: no visual noise ─── */
+.processing-overlay,
+.doctor-patient-remote-overlay {
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.processing-overlay__content,
+.doctor-patient-remote-overlay__content {
+  background: var(--mb-white);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  box-shadow: none;
+  padding: 1.5rem 2rem;
+}
+
+.processing-overlay__icon,
+.doctor-patient-remote-overlay__icon {
+  display: none;
+}
+
+.processing-overlay__text,
+.doctor-patient-remote-overlay__text {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mb-navy);
+  letter-spacing: -0.02em;
+}
+
+.processing-dots span,
+.doctor-patient-remote-overlay__dots span {
+  background: var(--mb-accent);
+}
+
+.mic-alert {
+  background: var(--mb-white);
+  border: 1px solid var(--mb-border);
+  color: var(--mb-navy);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+/* ─── Patient display ─── */
+body.patient-display .app {
+  background: var(--mb-surface);
+}
+
+body.patient-display .panel {
+  border-radius: 0;
+  max-width: none;
+}
+
+body.patient-display .display-main {
+  border: none;
+}
+
+body.patient-display .display-stage {
+  background: var(--mb-surface);
+}
+
+body.patient-display .subtitle-stage {
+  padding: 2rem 2.5rem 2.5rem;
+}
+
+body.patient-display .subtitle-body {
+  padding: 2rem 1.5rem;
+}
+
+body.patient-display .subtitle-speaker {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--mb-accent);
+  margin-bottom: 1.25rem;
+}
+
+body.patient-display .subtitle-text {
+  font-size: clamp(2.25rem, 7vw, 4.25rem);
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  color: var(--mb-navy);
+  max-width: 920px;
+}
+
+body.patient-display .subtitle-text.is-empty {
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  line-height: 1.75;
+  color: var(--mb-text-soft);
+}
+
+body.patient-display .welcome-screen {
+  background: var(--mb-surface);
+}
+
+body.patient-display .welcome-title {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-weight: 600;
+  color: var(--mb-navy);
+  line-height: 1.5;
+  letter-spacing: -0.02em;
+}
+
+body.patient-display .welcome-mic {
+  background: var(--mb-navy);
+  box-shadow: none;
+  animation: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
+}
+
+body.patient-display .welcome-messages li {
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  background: var(--mb-white);
+  box-shadow: none;
+  padding: 1rem 1.25rem;
+}
+
+body.patient-display .welcome-messages__lang {
+  color: var(--mb-accent);
+  font-size: 0.75rem;
+}
+
+body.patient-display .welcome-messages__text {
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--mb-navy);
+}
+
+body.patient-display .audio-unlock-overlay {
+  background: var(--mb-surface);
+}
+
+body.patient-display .audio-unlock-overlay__panel {
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+body.patient-display .audio-unlock-btn {
+  background: var(--mb-navy);
+  border-radius: 4px;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+body.patient-display .audio-unlock-btn:hover {
+  background: var(--mb-accent);
+}
+
+body.patient-display .patient-recording-prompt {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--mb-border);
+}
+
+body.patient-display .patient-recording-prompt__icon {
+  display: none;
+}
+
+body.patient-display .patient-recording-prompt__text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--mb-navy);
+}
+
+body.patient-display .subtitle-waveform {
+  opacity: 0.35;
+}
+
+body.patient-display .subtitle-body.is-audio-playing::before,
+body.patient-display .subtitle-body.is-audio-playing::after {
+  display: none;
+}
+
+/* Settings modal */
+.settings-modal__panel {
+  border-radius: 4px;
+  box-shadow: none;
+  border: 1px solid var(--mb-border);
+}
+
+.settings-modal__btn--primary {
+  background: var(--mb-navy);
+  box-shadow: none;
+}
+
+.settings-modal__btn--primary:hover {
+  background: var(--mb-accent);
+}
+
+@media (max-width: 900px) {
+  .panels {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  body.patient-display .subtitle-stage {
+    padding: 1.5rem 1.25rem;
+  }
+}

@@ -6,9 +6,10 @@
   <title>MediBridge · 환자 (디스플레이)</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
+  <link rel="stylesheet" href="/static/medical-minimal.css" />
   <script src="/static/medibridge-ws.js"></script>
 </head>
-<body>
+<body class="patient-display medibridge-ui">
   <div class="app">
     <header class="header">
       <div class="brand">
@@ -33,20 +34,18 @@
               <p class="audio-unlock-overlay__title">MediBridge 환자 모니터</p>
               <p class="audio-unlock-overlay__desc">출근 후 한 번만 눌러 주세요. 스피커·마이크 권한이 함께 활성화되며, 이후 번역 음성이 자동 재생됩니다.</p>
               <button type="button" id="btn-audio-unlock" class="audio-unlock-btn">
-                🔊 진료실 스피커·마이크 연결하기 (출근 후 클릭)
+                진료실 스피커·마이크 연결하기
               </button>
             </div>
           </div>
 
           <div id="display-processing" class="processing-overlay" aria-hidden="true">
             <div class="processing-overlay__content">
-              <span class="processing-overlay__icon" aria-hidden="true">⏳</span>
-              <span class="processing-overlay__text">번역 중...</span>
+              <span class="processing-overlay__text">번역 중</span>
               <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
             </div>
           </div>
           <div id="recording-prompt" class="patient-recording-prompt" aria-hidden="true">
-            <span class="patient-recording-prompt__icon" aria-hidden="true">🎙️</span>
             <span class="patient-recording-prompt__text">지금 말씀하세요</span>
             <span class="patient-recording-prompt__sub">의사 선생님이 듣고 있습니다</span>
           </div>
