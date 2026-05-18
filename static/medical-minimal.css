@@ -366,10 +366,47 @@ body.doctor-master .header__actions {
   filter: none;
 }
 
+.speak-btn__text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
 .speak-btn__shortcut-label,
 .speak-btn__hint {
   font-weight: 500;
   opacity: 0.85;
+}
+
+.shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  color: var(--mb-text-soft);
+  background: rgba(0, 40, 85, 0.06);
+  border: 1px solid var(--mb-border);
+}
+
+.speak-btn--doctor .shortcut-hint {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.speak-btn--patient .shortcut-hint {
+  color: var(--mb-navy);
+  background: rgba(0, 40, 85, 0.05);
+  border-color: var(--mb-border);
 }
 
 /* ─── Overlays: no visual noise ─── */

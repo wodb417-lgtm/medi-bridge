@@ -173,6 +173,31 @@ async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> N
     await manager.send_to_displays(payload)
 
 
+async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
+    """환자 오디오 처리 — WebSocket 수신 루프를 막지 않도록 백그라운드 실행."""
+    if not audio_bytes:
+        await broadcast_patient_status("ready", speaker="patient")
+        return
+    try:
+        await broadcast_patient_status("processing", speaker="patient")
+        result = await process_audio_session(
+            audio_bytes=audio_bytes,
+            speaker="patient",
+        )
+        await manager.broadcast(result)
+        await broadcast_patient_status("ready", speaker="patient")
+    except Exception as exc:
+        logger.exception("patient audio pipeline failed")
+        await manager.broadcast(
+            {
+                "type": "error",
+                "message": str(exc),
+                "speaker": "patient",
+            }
+        )
+        await broadcast_patient_status("ready", speaker="patient")
+
+
 async def relay_doctor_state_change(msg: dict) -> None:
     """의사 state_change를 환자 디스플레이 status 패킷으로 변환·전송."""
     state = (msg.get("state") or "").strip()
@@ -855,7 +880,16 @@ async def websocket_audio(websocket: WebSocket):
 
     try:
         while True:
-            message = await websocket.receive()
+            try:
+                message = await websocket.receive()
+            except WebSocketDisconnect:
+                raise
+            except Exception as recv_exc:
+                logger.warning(
+                    "WebSocket receive error client=%s: %s", client_addr, recv_exc
+                )
+                continue
+
             if message.get("type") == "websocket.disconnect":
                 break
 
@@ -873,127 +907,147 @@ async def websocket_audio(websocket: WebSocket):
                 logger.warning("Invalid JSON from %s: %r", client_addr, raw[:120])
                 continue
 
-            msg_type = msg.get("type")
-            action = msg.get("action")
-
-            if action == "start_patient_record":
-                if manager.get_role(websocket) != "doctor":
-                    continue
-                patient_remote_chunks.clear()
-                await manager.send_to_displays(
-                    {"type": "remote_patient_record", "phase": "start"}
+            try:
+                await _dispatch_websocket_message(
+                    websocket, msg, client_addr=client_addr
                 )
-                continue
-
-            if action == "stop_patient_record":
-                if manager.get_role(websocket) != "doctor":
-                    continue
-                logger.info("stop_patient_record → display stop + broadcast translating")
-                await manager.send_to_displays(
-                    {"type": "remote_patient_record", "phase": "stop"}
+            except WebSocketDisconnect:
+                raise
+            except Exception as handler_exc:
+                logger.exception(
+                    "WebSocket handler error client=%s: %s",
+                    client_addr,
+                    handler_exc,
                 )
-                await broadcast_patient_status("processing", speaker="patient")
-                continue
-
-            if msg_type == "patient_audio":
-                if manager.get_role(websocket) != "display":
-                    continue
-                phase = msg.get("phase")
-                if phase == "chunk":
-                    data_b64 = msg.get("data")
-                    if isinstance(data_b64, str) and data_b64.strip():
-                        try:
-                            patient_remote_chunks.append(
-                                decode_audio_chunk_b64(data_b64)
-                            )
-                        except ValueError as exc:
-                            logger.warning("Patient audio chunk skipped: %s", exc)
-                elif phase == "end":
-                    try:
-                        await broadcast_patient_status("processing", speaker="patient")
-                        result = await process_audio_session(
-                            audio_bytes=b"".join(patient_remote_chunks),
-                            speaker="patient",
-                        )
-                        await manager.broadcast(result)
-                        await broadcast_patient_status("ready", speaker="patient")
-                    except Exception as exc:
-                        await manager.broadcast(
-                            {
-                                "type": "error",
-                                "message": str(exc),
-                                "speaker": "patient",
-                            }
-                        )
-                        await broadcast_patient_status("ready", speaker="patient")
-                    patient_remote_chunks.clear()
-                continue
-
-            if msg_type == "register":
-                manager.register(websocket, msg.get("role", "display"))
-                await websocket.send_json(
-                    {"type": "registered", "role": manager.get_role(websocket)}
-                )
-                await websocket.send_json(session_state_payload())
-                continue
-
-            if msg_type == "state_change":
-                if manager.get_role(websocket) != "doctor":
-                    continue
-                await relay_doctor_state_change(msg)
-                state_val = (msg.get("state") or "").strip()
-                if state_val == "patient_speaking":
-                    patient_remote_chunks.clear()
-                    await manager.send_to_displays(
-                        {"type": "remote_patient_record", "phase": "start"}
-                    )
-                elif state_val == "processing" and msg.get("speaker") == "patient":
-                    await manager.send_to_displays(
-                        {"type": "remote_patient_record", "phase": "stop"}
-                    )
-                continue
-
-            if msg_type == "status":
-                if manager.get_role(websocket) != "doctor":
-                    continue
-                status = msg.get("status")
-                if status in PATIENT_UI_STATUSES:
-                    await broadcast_patient_status(
-                        status, speaker=msg.get("speaker", "doctor")
-                    )
-                continue
-
-            if msg_type == "set_language":
-                if manager.get_role(websocket) != "doctor":
-                    continue
-                lang_code = msg.get("lang_code")
-                if not lang_code or str(lang_code).lower().strip() in ("auto", ""):
-                    continue
-                locked = lock_session_language(lang_code)
-                payload = session_state_payload()
-                payload["manual"] = True
-                payload["detected_language_label_ko"] = label_ko_for_code(locked)
-                await manager.broadcast(payload)
-                continue
-
-            if msg_type == "reset":
-                if manager.get_role(websocket) == "doctor":
-                    reset_session_language()
-                    await manager.broadcast(
+                try:
+                    await websocket.send_json(
                         {
-                            "type": "reset",
-                            "session_lang": None,
-                            "language_locked": False,
-                            "detected_language_label_ko": "자동 감지",
-                            "stop_audio": True,
+                            "type": "error",
+                            "message": "서버 처리 중 오류가 발생했습니다.",
                         }
                     )
-                    await broadcast_patient_status("ready", speaker="doctor")
-                continue
-
-            if msg_type == "ping":
-                await websocket.send_json({"type": "pong"})
+                except Exception:
+                    pass
 
     except WebSocketDisconnect:
         logger.info("WebSocket 연결 종료 | client=%s", client_addr)
         manager.disconnect(websocket)
+
+
+async def _dispatch_websocket_message(
+    websocket: WebSocket,
+    msg: dict,
+    *,
+    client_addr: str,
+) -> None:
+    """단일 WebSocket JSON 메시지 처리 (루프는 연결 유지)."""
+    global patient_remote_chunks
+
+    msg_type = msg.get("type")
+    action = msg.get("action")
+
+    if action == "start_patient_record":
+        if manager.get_role(websocket) != "doctor":
+            return
+        patient_remote_chunks.clear()
+        await manager.send_to_displays(
+            {"type": "remote_patient_record", "phase": "start"}
+        )
+        return
+
+    if action == "stop_patient_record":
+        if manager.get_role(websocket) != "doctor":
+            return
+        logger.info("stop_patient_record → display stop + broadcast translating")
+        await manager.send_to_displays(
+            {"type": "remote_patient_record", "phase": "stop"}
+        )
+        await broadcast_patient_status("processing", speaker="patient")
+        return
+
+    if msg_type == "patient_audio":
+        if manager.get_role(websocket) != "display":
+            return
+        phase = msg.get("phase")
+        if phase == "chunk":
+            data_b64 = msg.get("data")
+            if isinstance(data_b64, str) and data_b64.strip():
+                try:
+                    patient_remote_chunks.append(
+                        decode_audio_chunk_b64(data_b64)
+                    )
+                except ValueError as exc:
+                    logger.warning("Patient audio chunk skipped: %s", exc)
+        elif phase == "end":
+            audio_bytes = b"".join(patient_remote_chunks)
+            patient_remote_chunks.clear()
+            asyncio.create_task(
+                run_patient_audio_pipeline(audio_bytes),
+                name="patient_audio_pipeline",
+            )
+        return
+
+    if msg_type == "register":
+        manager.register(websocket, msg.get("role", "display"))
+        await websocket.send_json(
+            {"type": "registered", "role": manager.get_role(websocket)}
+        )
+        await websocket.send_json(session_state_payload())
+        return
+
+    if msg_type == "state_change":
+        if manager.get_role(websocket) != "doctor":
+            return
+        await relay_doctor_state_change(msg)
+        state_val = (msg.get("state") or "").strip()
+        if state_val == "patient_speaking":
+            patient_remote_chunks.clear()
+            await manager.send_to_displays(
+                {"type": "remote_patient_record", "phase": "start"}
+            )
+        elif state_val == "processing" and msg.get("speaker") == "patient":
+            await manager.send_to_displays(
+                {"type": "remote_patient_record", "phase": "stop"}
+            )
+        return
+
+    if msg_type == "status":
+        if manager.get_role(websocket) != "doctor":
+            return
+        status = msg.get("status")
+        if status in PATIENT_UI_STATUSES:
+            await broadcast_patient_status(
+                status, speaker=msg.get("speaker", "doctor")
+            )
+        return
+
+    if msg_type == "set_language":
+        if manager.get_role(websocket) != "doctor":
+            return
+        lang_code = msg.get("lang_code")
+        if not lang_code or str(lang_code).lower().strip() in ("auto", ""):
+            return
+        locked = lock_session_language(lang_code)
+        payload = session_state_payload()
+        payload["manual"] = True
+        payload["detected_language_label_ko"] = label_ko_for_code(locked)
+        await manager.broadcast(payload)
+        return
+
+    if msg_type == "reset":
+        if manager.get_role(websocket) == "doctor":
+            reset_session_language()
+            await manager.broadcast(
+                {
+                    "type": "reset",
+                    "session_lang": None,
+                    "language_locked": False,
+                    "detected_language_label_ko": "자동 감지",
+                    "stop_audio": True,
+                }
+            )
+            await broadcast_patient_status("ready", speaker="doctor")
+        return
+
+    if msg_type == "ping":
+        await websocket.send_json({"type": "pong"})

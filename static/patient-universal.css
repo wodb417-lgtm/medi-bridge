@@ -51,14 +51,20 @@ body.patient-display .brand h1 {
   margin: 0;
 }
 
-.patient-universal-stage[data-ui-state="subtitle"],
+.patient-universal-stage[data-ui-state="subtitle"]:not(.is-live-status),
 .patient-universal-stage[data-ui-state="unlock"] {
   display: none;
 }
 
+.patient-universal-stage.is-live-status {
+  display: flex !important;
+  z-index: 6;
+}
+
 .patient-universal-stage[data-ui-state="recording"],
-.patient-universal-stage[data-ui-state="processing"] {
-  z-index: 5;
+.patient-universal-stage[data-ui-state="processing"],
+.patient-universal-stage[data-ui-state="patient_speaking"] {
+  z-index: 6;
 }
 
 .ui-state {
@@ -73,10 +79,6 @@ body.patient-display .brand h1 {
 .patient-universal-stage[data-ui-state="patient_speaking"] .ui-state--recording,
 .patient-universal-stage[data-ui-state="processing"] .ui-state--processing {
   display: flex;
-}
-
-.patient-universal-stage[data-ui-state="patient_speaking"] {
-  z-index: 5;
 }
 
 .patient-universal-stage[data-ui-state="patient_speaking"] .ui-icon--recording i.fas {

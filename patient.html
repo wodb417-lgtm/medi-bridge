@@ -165,10 +165,18 @@
         subtitle: "",
       };
 
+      var ACTIVE_PATIENT_UI_STATES = {
+        patient_speaking: true,
+        recording: true,
+        processing: true,
+      };
+
       function setPatientUiState(state, hintOverride) {
         if (!patientUniversalStage) return;
         var key = state || "ready";
         patientUniversalStage.setAttribute("data-ui-state", key);
+        var isLive = !!ACTIVE_PATIENT_UI_STATES[key];
+        patientUniversalStage.classList.toggle("is-live-status", isLive);
         if (uiHintText) {
           uiHintText.textContent =
             hintOverride != null ? hintOverride : PATIENT_UI_HINTS[key] || "";
@@ -190,16 +198,21 @@
         }
 
         if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
+          hideProcessingOverlay();
+          hideRecordingPrompt();
           setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
           return;
         }
 
         if (status === "recording" && speaker === "doctor") {
+          hideProcessingOverlay();
+          hideRecordingPrompt();
           setPatientUiState("recording", PATIENT_UI_HINTS.recording);
           return;
         }
 
         if (status === "processing") {
+          hideRecordingPrompt();
           var processingHint =
             speaker === "patient"
               ? PATIENT_UI_HINTS.processing_patient
@@ -210,6 +223,8 @@
         }
 
         if (status === "ready") {
+          hideProcessingOverlay();
+          hideRecordingPrompt();
           if (translationView.classList.contains("is-visible")) {
             setPatientUiState("subtitle");
           } else if (clinicAudioInitializedByUser) {
@@ -935,9 +950,6 @@
           updateSubtitle(displayText, msg.speaker);
           if (msg.detected_language_label_ko) {
             setDetectedBadge("detected", msg.detected_language_label_ko);
-          }
-          if (msg.speaker === "doctor") {
-            setPatientUiState("subtitle");
           }
         }
       }
