@@ -1,0 +1,255 @@
+/**
+ * 환자 디스플레이 — 글로벌 유니버설 아이콘 UI
+ * Ready · Recording · Processing · Subtitle
+ */
+
+body.patient-display .display-stage {
+  background: var(--mb-white);
+}
+
+body.patient-display .header {
+  min-height: auto;
+  padding: 0.5rem 1rem;
+}
+
+body.patient-display .brand p {
+  display: none;
+}
+
+body.patient-display .brand h1 {
+  font-size: 0.875rem;
+}
+
+/* 통합 상태 허브 */
+.patient-universal-stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2.5rem 2rem;
+  background: var(--mb-white);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.patient-universal-stage[data-ui-state="subtitle"] {
+  display: none;
+}
+
+.patient-universal-stage[data-ui-state="recording"],
+.patient-universal-stage[data-ui-state="processing"] {
+  z-index: 5;
+}
+
+.ui-state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.patient-universal-stage[data-ui-state="ready"] .ui-state--ready,
+.patient-universal-stage[data-ui-state="recording"] .ui-state--recording,
+.patient-universal-stage[data-ui-state="processing"] .ui-state--processing {
+  display: flex;
+}
+
+.ui-icon {
+  color: var(--mb-navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ui-icon svg {
+  width: clamp(5rem, 18vw, 9rem);
+  height: clamp(5rem, 18vw, 9rem);
+}
+
+/* Ready — 청진기(대기) */
+.ui-icon--ready svg {
+  stroke: var(--mb-navy);
+  fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Recording — 마이크 펄스 */
+.ui-icon--recording {
+  position: relative;
+}
+
+.ui-icon--recording::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  border: 3px solid var(--mb-accent);
+  opacity: 0.35;
+  animation: ui-mic-ring 1.6s ease-out infinite;
+}
+
+.ui-icon--recording svg {
+  fill: var(--mb-accent);
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes ui-mic-ring {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+
+.ui-icon--pulse svg {
+  animation: ui-mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ui-mic-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.88;
+  }
+}
+
+/* Processing — 메디컬 스피너 */
+.ui-icon--processing .medical-spinner {
+  width: clamp(4.5rem, 16vw, 7rem);
+  height: clamp(4.5rem, 16vw, 7rem);
+  border: 5px solid var(--mb-border);
+  border-top-color: var(--mb-accent);
+  border-radius: 50%;
+  animation: ui-spin 0.9s linear infinite;
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ui-hint {
+  font-size: clamp(1.125rem, 3vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--mb-accent);
+  margin: 0;
+  min-height: 1.5em;
+}
+
+.patient-universal-stage[data-ui-state="ready"] .ui-hint {
+  color: var(--mb-text-soft);
+  letter-spacing: 0.12em;
+}
+
+/* Welcome — 유니버설 허브가 아이콘을 담당 (레거시 텍스트 레이어는 비활성) */
+body.patient-display .welcome-screen {
+  background: transparent;
+  z-index: 1;
+  pointer-events: none;
+}
+
+body.patient-display .patient-universal-stage {
+  z-index: 2;
+}
+
+body.patient-display .welcome-content {
+  padding: 0;
+}
+
+body.patient-display .welcome-messages,
+body.patient-display .welcome-title,
+body.patient-display .welcome-mic {
+  display: none !important;
+}
+
+body.patient-display .welcome-screen:not(.is-hidden) ~ .patient-universal-stage {
+  pointer-events: none;
+}
+
+/* 레거시 오버레이 숨김 — 상태 허브로 대체 */
+body.patient-display #display-processing,
+body.patient-display #recording-prompt {
+  display: none !important;
+}
+
+/* 번역 본문 — 큰 글씨 */
+body.patient-display .translation-view {
+  background: var(--mb-white);
+  z-index: 3;
+}
+
+body.patient-display .translation-view.is-visible {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.patient-display .translation-view .panel-header--compact {
+  flex-shrink: 0;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--mb-border);
+  background: var(--mb-surface);
+}
+
+body.patient-display .subtitle-stage {
+  flex: 1;
+  padding: 2.5rem 2rem 3rem;
+  justify-content: center;
+}
+
+body.patient-display .subtitle-body {
+  padding: 2rem 1.5rem;
+  border: 1px solid var(--mb-border);
+  border-radius: 8px;
+  background: var(--mb-surface);
+  box-shadow: 0 2px 16px rgba(0, 40, 85, 0.06);
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+body.patient-display .subtitle-text {
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1.75;
+  letter-spacing: 0.02em;
+  color: var(--mb-navy);
+}
+
+body.patient-display .subtitle-waveform {
+  display: none;
+}
+
+body.patient-display .audio-unlock-overlay__panel {
+  text-align: center;
+}
+
+body.patient-display .audio-unlock-overlay__desc {
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 28rem;
+  margin: 0 auto 1.25rem;
+}
+
+body.patient-display .audio-unlock-overlay__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--mb-navy);
+  margin-bottom: 0.75rem;
+}

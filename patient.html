@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
+  <link rel="stylesheet" href="/static/patient-universal.css" />
   <script src="/static/medibridge-ws.js"></script>
 </head>
 <body class="patient-display medibridge-ui">
@@ -37,6 +38,29 @@
                 진료실 스피커·마이크 연결하기
               </button>
             </div>
+          </div>
+
+          <div id="patient-universal-stage" class="patient-universal-stage" data-ui-state="ready" aria-live="polite">
+            <div class="ui-state ui-state--ready">
+              <div class="ui-icon ui-icon--ready" aria-hidden="true">
+                <svg viewBox="0 0 64 64" aria-hidden="true">
+                  <path d="M18 10a6 6 0 0112 0v16a6 6 0 01-11.2 2.9M24 28v8a10 10 0 0010 10h2a8 8 0 008-8v-6"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ui-state ui-state--recording">
+              <div class="ui-icon ui-icon--recording ui-icon--pulse" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="ui-state ui-state--processing">
+              <div class="ui-icon ui-icon--processing" aria-hidden="true">
+                <div class="medical-spinner"></div>
+              </div>
+            </div>
+            <p id="ui-hint-text" class="ui-hint">READY · 대기</p>
           </div>
 
           <div id="display-processing" class="processing-overlay" aria-hidden="true">
@@ -130,6 +154,23 @@
       var connectionStatusText = document.getElementById("connection-status-text");
       var displayProcessing = document.getElementById("display-processing");
       var recordingPrompt = document.getElementById("recording-prompt");
+      var patientUniversalStage = document.getElementById("patient-universal-stage");
+      var uiHintText = document.getElementById("ui-hint-text");
+
+      var PATIENT_UI_HINTS = {
+        ready: "READY · 대기",
+        recording: "SPEAK · 말씀하세요",
+        processing: "TRANSLATING · 번역중",
+      };
+
+      function setPatientUiState(state) {
+        if (!patientUniversalStage) return;
+        var key = state || "ready";
+        patientUniversalStage.setAttribute("data-ui-state", key);
+        if (uiHintText) {
+          uiHintText.textContent = PATIENT_UI_HINTS[key] || "";
+        }
+      }
       var subtitleBody = document.getElementById("subtitle-body");
       var audioUnlockOverlay = document.getElementById("audio-unlock-overlay");
       var btnAudioUnlock = document.getElementById("btn-audio-unlock");
@@ -642,6 +683,7 @@
         hideProcessingOverlay();
         hideRecordingPrompt();
         hideAudioUnlockOverlay();
+        setPatientUiState("ready");
         welcomeScreen.classList.remove("is-hidden");
         welcomeScreen.setAttribute("aria-hidden", "false");
         translationView.classList.remove("is-visible");
@@ -654,11 +696,18 @@
         welcomeScreen.classList.add("is-hidden");
         welcomeScreen.setAttribute("aria-hidden", "true");
         translationView.classList.add("is-visible");
+        if (
+          !recordingPrompt.classList.contains("is-visible") &&
+          !displayProcessing.classList.contains("is-visible")
+        ) {
+          setPatientUiState("subtitle");
+        }
         if (labelKo) setDetectedBadge("detected", labelKo);
       }
 
       function showProcessingOverlay() {
         hideRecordingPrompt();
+        setPatientUiState("processing");
         displayProcessing.classList.add("is-visible");
         displayProcessing.setAttribute("aria-hidden", "false");
       }
@@ -666,10 +715,14 @@
       function hideProcessingOverlay() {
         displayProcessing.classList.remove("is-visible");
         displayProcessing.setAttribute("aria-hidden", "true");
+        if (!recordingPrompt.classList.contains("is-visible") && !welcomeScreen.classList.contains("is-hidden")) {
+          setPatientUiState("ready");
+        }
       }
 
       function showRecordingPrompt() {
         hideProcessingOverlay();
+        setPatientUiState("recording");
         recordingPrompt.classList.add("is-visible");
         recordingPrompt.setAttribute("aria-hidden", "false");
       }
@@ -677,6 +730,13 @@
       function hideRecordingPrompt() {
         recordingPrompt.classList.remove("is-visible");
         recordingPrompt.setAttribute("aria-hidden", "true");
+        if (!displayProcessing.classList.contains("is-visible")) {
+          if (translationView.classList.contains("is-visible")) {
+            setPatientUiState("subtitle");
+          } else if (!welcomeScreen.classList.contains("is-hidden")) {
+            setPatientUiState("ready");
+          }
+        }
       }
 
       function applySessionState(msg) {

@@ -294,11 +294,11 @@ body.doctor-master .header__actions {
 }
 
 .translation-box {
-  background: var(--mb-surface);
+  background: var(--mb-white);
   border: 1px solid var(--mb-border);
-  border-radius: 4px;
-  box-shadow: none;
-  padding: 1.5rem 1.25rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 40, 85, 0.06);
+  padding: 1.75rem 1.5rem;
   min-height: 100%;
   align-items: flex-start;
   justify-content: flex-start;
@@ -307,7 +307,7 @@ body.doctor-master .header__actions {
 
 .panel:hover .translation-box {
   border-color: var(--mb-border);
-  box-shadow: none;
+  box-shadow: 0 3px 16px rgba(0, 40, 85, 0.08);
 }
 
 .translation-text {
