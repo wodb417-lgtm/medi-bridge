@@ -1711,3 +1711,30 @@ html, body {
     max-width: none;
   }
 }
+
+/* 환자 디스플레이: 디버그/오류 토스트 */
+.patient-error-toast {
+  position: fixed;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 12px;
+  right: 12px;
+  z-index: 200;
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(185, 28, 28, 0.94);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.patient-error-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
