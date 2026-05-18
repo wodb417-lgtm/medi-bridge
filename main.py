@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import binascii
 import json
 import logging
 import os
@@ -424,6 +425,24 @@ WHISPER_UPLOAD_MIME: dict[str, str] = {
 }
 
 
+def decode_audio_chunk_b64(data_b64: str) -> bytes:
+    """JSON 청크의 Base64 오디오만 추출 (메타데이터와 분리)."""
+    if not isinstance(data_b64, str):
+        raise ValueError("chunk data must be a base64 string")
+    cleaned = data_b64.strip()
+    if not cleaned:
+        return b""
+    try:
+        return base64.b64decode(cleaned, validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("invalid base64 audio chunk") from exc
+
+
+def assemble_doctor_audio(chunks: list[bytes]) -> bytes:
+    """의사 녹음 청크를 순수 바이트열로 병합."""
+    return b"".join(chunks)
+
+
 def whisper_upload_file(file_path: str) -> tuple[str, object, str]:
     """OpenAI Whisper file= 튜플 (파일명, 바이너리 스트림, MIME) — Invalid file format 방지."""
     ext = os.path.splitext(file_path)[1].lower()
@@ -822,17 +841,50 @@ async def websocket_audio(websocket: WebSocket):
 
     chunks: list[bytes] = []
     session_meta: dict = {}
+    doctor_audio_active = False
 
     try:
         while True:
-            raw = await websocket.receive_text()
-            msg = json.loads(raw)
+            message = await websocket.receive()
+            if message.get("type") == "websocket.disconnect":
+                break
+
+            # 의사 오디오: 순수 바이너리 WebSocket 프레임만 청크로 수집 (JSON·메타와 완전 분리)
+            frame_bytes = message.get("bytes")
+            if frame_bytes is not None:
+                if (
+                    manager.get_role(websocket) == "doctor"
+                    and doctor_audio_active
+                    and len(frame_bytes) > 0
+                ):
+                    chunks.append(frame_bytes)
+                    logger.debug(
+                        "Doctor binary audio chunk: %d bytes (total_chunks=%d)",
+                        len(frame_bytes),
+                        len(chunks),
+                    )
+                continue
+
+            raw = message.get("text")
+            if not raw:
+                continue
+
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON from %s: %r", client_addr, raw[:120])
+                continue
+
             msg_type = msg.get("type")
             action = msg.get("action")
 
             if action == "start_patient_record":
                 if manager.get_role(websocket) != "doctor":
                     continue
+                if msg.get("department"):
+                    current_session_department = resolve_department(
+                        msg.get("department")
+                    )
                 patient_remote_chunks.clear()
                 await manager.send_to_displays(
                     {"type": "remote_patient_record", "phase": "start"}
@@ -854,9 +906,14 @@ async def websocket_audio(websocket: WebSocket):
                     continue
                 phase = msg.get("phase")
                 if phase == "chunk":
-                    data_b64 = msg.get("data", "")
-                    if data_b64:
-                        patient_remote_chunks.append(base64.b64decode(data_b64))
+                    data_b64 = msg.get("data")
+                    if isinstance(data_b64, str) and data_b64.strip():
+                        try:
+                            patient_remote_chunks.append(
+                                decode_audio_chunk_b64(data_b64)
+                            )
+                        except ValueError as exc:
+                            logger.warning("Patient audio chunk skipped: %s", exc)
                 elif phase == "end":
                     try:
                         result = await process_audio_session(
@@ -933,45 +990,62 @@ async def websocket_audio(websocket: WebSocket):
                 if speaker != "doctor":
                     continue
                 chunks = []
-                if msg.get("department"):
-                    current_session_department = resolve_department(msg.get("department"))
+                doctor_audio_active = True
                 session_meta = {
                     "speaker": "doctor",
                     "target_lang": msg.get("target_lang", "auto"),
                     "manual_lang": msg.get("manual_lang"),
                     "department": current_session_department,
                 }
+                logger.info(
+                    "Doctor session start (meta only); department=%s",
+                    current_session_department,
+                )
 
             elif msg_type == "chunk":
-                if manager.get_role(websocket) != "doctor":
+                # 레거시: Base64 JSON 청크 (환자 디스플레이 등). 의사는 바이너리 프레임 사용.
+                if manager.get_role(websocket) != "doctor" or not doctor_audio_active:
                     continue
-                data_b64 = msg.get("data", "")
-                if data_b64:
-                    chunks.append(base64.b64decode(data_b64))
+                data_b64 = msg.get("data")
+                if isinstance(data_b64, str) and data_b64.strip():
+                    try:
+                        chunks.append(decode_audio_chunk_b64(data_b64))
+                    except ValueError as exc:
+                        logger.warning("Doctor base64 chunk skipped: %s", exc)
 
             elif msg_type == "end":
                 if manager.get_role(websocket) != "doctor":
                     continue
+                doctor_audio_active = False
                 speaker = session_meta.get("speaker", "doctor")
                 target_override = session_meta.get("manual_lang") or session_meta.get(
                     "target_lang"
                 )
+                audio_bytes = assemble_doctor_audio(chunks)
+                logger.info(
+                    "Doctor session end: %d chunks, %d bytes assembled",
+                    len(chunks),
+                    len(audio_bytes),
+                )
+                chunks = []
                 await manager.broadcast(
                     {"type": "processing", "speaker": speaker}
                 )
                 try:
+                    if not audio_bytes:
+                        raise ValueError("수신된 오디오 데이터가 없습니다.")
                     result = await process_audio_session(
-                        audio_bytes=b"".join(chunks),
+                        audio_bytes=audio_bytes,
                         speaker=speaker,
                         target_lang=target_override,
-                        department=session_meta.get("department"),
+                        department=session_meta.get("department")
+                        or current_session_department,
                     )
                     await manager.broadcast(result)
                 except Exception as exc:
                     await manager.broadcast(
                         {"type": "error", "message": str(exc), "speaker": speaker}
                     )
-                chunks = []
                 session_meta = {}
 
             elif msg_type == "ping":

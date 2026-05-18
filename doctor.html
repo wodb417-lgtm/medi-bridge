@@ -172,6 +172,7 @@
       var isRecording = false;
       var isProcessing = false;
       var isPatientRecording = false;
+      var doctorRecordingActive = false;
 
       var SHORTCUTS_STORAGE_KEY = "medibridge-shortcuts";
       var DEFAULT_SHORTCUTS = {
@@ -380,18 +381,14 @@
         wsConnectPromise = new Promise(function (resolve, reject) {
           setConnectionStatus("warn", "서버 연결 중…");
           var socket = new WebSocket(WS_URL);
+          socket.binaryType = "arraybuffer";
 
           socket.onopen = function () {
             ws = socket;
             wsConnectPromise = null;
-            socket.send(JSON.stringify({ type: "register", role: "doctor" }));
+            sendDoctorMeta({ type: "register", role: "doctor" });
             try {
-              socket.send(
-                JSON.stringify({
-                  type: "set_department",
-                  department: getDepartmentCode(),
-                })
-              );
+              syncDepartmentMetaOnly();
             } catch (err) { /* ignore */ }
             setConnectionStatus("ok", "서버 연결됨");
             resolve(socket);
@@ -423,11 +420,38 @@
         return new Promise(function (resolve, reject) {
           var reader = new FileReader();
           reader.onloadend = function () {
-            var parts = reader.result.split(",");
-            resolve(parts[1] || "");
+            var result = reader.result;
+            if (typeof result !== "string") {
+              reject(new Error("Failed to read audio blob"));
+              return;
+            }
+            var comma = result.indexOf(",");
+            var b64 = (comma >= 0 ? result.slice(comma + 1) : result).replace(/\s/g, "");
+            resolve(b64);
           };
           reader.onerror = reject;
           reader.readAsDataURL(blob);
+        });
+      }
+
+      /** 메타데이터만 JSON 텍스트 프레임으로 전송 (오디오와 절대 혼합하지 않음) */
+      function sendDoctorMeta(payload) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          throw new Error("서버와 연결되어 있지 않습니다.");
+        }
+        ws.send(JSON.stringify(payload));
+      }
+
+      /** 순수 오디오 바이너리만 WebSocket 바이너리 프레임으로 전송 */
+      function sendDoctorAudioBinary(blob) {
+        if (!doctorRecordingActive) return Promise.resolve();
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return Promise.reject(new Error("서버와 연결되어 있지 않습니다."));
+        }
+        if (!blob || blob.size === 0) return Promise.resolve();
+        return blob.arrayBuffer().then(function (buffer) {
+          if (!doctorRecordingActive) return;
+          ws.send(buffer);
         });
       }
 
@@ -440,8 +464,7 @@
       }
 
       function sendWs(payload) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("서버와 연결되어 있지 않습니다.");
-        ws.send(JSON.stringify(payload));
+        sendDoctorMeta(payload);
       }
 
       function getPatientTargetLangCode() {
@@ -488,15 +511,17 @@
         syncDepartmentToServer();
       }
 
-      function buildSessionMeta(speaker) {
-        var targetLang = getPatientTargetLangCode();
+      function buildSessionStartMeta(speaker) {
         return {
           type: "start",
           speaker: speaker,
-          target_lang: targetLang,
+          target_lang: getPatientTargetLangCode(),
           manual_lang: languageSelect.value || null,
-          department: getDepartmentCode(),
         };
+      }
+
+      function syncDepartmentMetaOnly() {
+        sendDoctorMeta({ type: "set_department", department: getDepartmentCode() });
       }
 
       async function startDoctorRecording(btn) {
@@ -511,17 +536,17 @@
         var options = mimeType ? { mimeType: mimeType } : undefined;
         mediaRecorder = new MediaRecorder(audioStream, options);
 
-        mediaRecorder.ondataavailable = async function (event) {
+        syncDepartmentMetaOnly();
+        sendDoctorMeta(buildSessionStartMeta("doctor"));
+        doctorRecordingActive = true;
+
+        mediaRecorder.ondataavailable = function (event) {
           if (!event.data || event.data.size === 0) return;
-          try {
-            var b64 = await blobToBase64(event.data);
-            sendWs({ type: "chunk", data: b64, mime: mimeType || "audio/webm" });
-          } catch (err) {
+          sendDoctorAudioBinary(event.data).catch(function (err) {
             console.error(err);
-          }
+          });
         };
 
-        sendWs(buildSessionMeta("doctor"));
         mediaRecorder.start(250);
         isRecording = true;
         setRecordingButton(btn, true);
@@ -545,7 +570,8 @@
             audioStream = null;
           }
           try {
-            sendWs({ type: "end" });
+            doctorRecordingActive = false;
+            sendDoctorMeta({ type: "end" });
           } catch (err) {
             isProcessing = false;
             hideProcessingOverlay();
@@ -565,10 +591,8 @@
         setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
         connectWebSocket()
           .then(function () {
-            sendWs({
-              action: "start_patient_record",
-              department: getDepartmentCode(),
-            });
+            syncDepartmentMetaOnly();
+            sendDoctorMeta({ action: "start_patient_record" });
           })
           .catch(function () {
             isPatientRecording = false;

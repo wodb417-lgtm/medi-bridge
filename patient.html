@@ -156,12 +156,24 @@
         return new Promise(function (resolve, reject) {
           var reader = new FileReader();
           reader.onloadend = function () {
-            var result = reader.result || "";
-            var base64 = result.split(",")[1] || "";
-            resolve(base64);
+            var result = reader.result;
+            if (typeof result !== "string") {
+              reject(new Error("Failed to read audio blob"));
+              return;
+            }
+            var comma = result.indexOf(",");
+            var b64 = (comma >= 0 ? result.slice(comma + 1) : result).replace(/\s/g, "");
+            resolve(b64);
           };
           reader.onerror = reject;
           reader.readAsDataURL(blob);
+        });
+      }
+
+      function sendPatientAudioChunk(blob) {
+        return blobToBase64(blob).then(function (b64) {
+          if (!b64) return;
+          sendPatientWs({ type: "patient_audio", phase: "chunk", data: b64 });
         });
       }
 
@@ -194,14 +206,11 @@
         var mimeType = getSupportedMimeType();
         var options = mimeType ? { mimeType: mimeType } : undefined;
         micRecorder = new MediaRecorder(micStream, options);
-        micRecorder.ondataavailable = async function (event) {
+        micRecorder.ondataavailable = function (event) {
           if (!event.data || event.data.size === 0) return;
-          try {
-            var b64 = await blobToBase64(event.data);
-            sendPatientWs({ type: "patient_audio", phase: "chunk", data: b64 });
-          } catch (err) {
+          sendPatientAudioChunk(event.data).catch(function (err) {
             console.error(err);
-          }
+          });
         };
         micRecorder.start(250);
         isRemoteRecording = true;
