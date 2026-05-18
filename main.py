@@ -160,6 +160,9 @@ DEFAULT_DOCTOR_TARGET_LANG = "en"
 TTS_VOICE_DEFAULT = "nova"
 TTS_VOICE_ALT = "onyx"
 
+# 번역·문맥 교정용 채팅 모델 (지연 시간 최적화)
+GPT_CHAT_MODEL = "gpt-4o-mini"
+
 MEDICAL_INTERPRETER_SYSTEM_PROMPT = """You are an intelligent medical AI assistant in a Korean hospital outpatient clinic.
 You specialize in interpreting a doctor's spoken Korean (via speech-to-text) into the patient's language with clinical accuracy and safety.
 
@@ -407,7 +410,7 @@ def reconcile_patient_korean_false_positive(whisper_text: str) -> str:
         "3. Output ONLY the final Korean text, or an empty string — no labels or explanations."
     )
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=GPT_CHAT_MODEL,
         messages=[
             {"role": "system", "content": MEDICAL_INTERPRETER_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
@@ -451,7 +454,7 @@ def translate_text(text: str, source_lang: str, target_lang: str) -> str:
         )
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=GPT_CHAT_MODEL,
         messages=[
             {"role": "system", "content": MEDICAL_INTERPRETER_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
