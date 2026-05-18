@@ -486,6 +486,8 @@ async def process_audio_session(
                 voice=TTS_VOICE_DEFAULT,
             )
             if tts_b64:
+                # WebSocket JSON: MP3 bytes as ASCII Base64 (not URL, not raw binary frame)
+                payload["tts_format"] = "base64"
                 payload["tts_audio_b64"] = tts_b64
                 payload["tts_mime"] = "audio/mpeg"
             return payload

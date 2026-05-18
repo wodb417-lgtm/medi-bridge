@@ -236,13 +236,146 @@
         detectedLangValue.textContent = valueText;
       }
 
-      function base64ToArrayBuffer(b64) {
-        var binary = atob(b64);
-        var bytes = new Uint8Array(binary.length);
-        for (var i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
+      function normalizeBase64String(input) {
+        if (!input) return "";
+        var s = String(input).trim().replace(/\s/g, "");
+        var marker = "base64,";
+        var idx = s.indexOf(marker);
+        if (idx !== -1) {
+          s = s.substring(idx + marker.length);
         }
-        return bytes.buffer;
+        return s;
+      }
+
+      function base64ToArrayBuffer(b64) {
+        var cleaned = normalizeBase64String(b64);
+        if (!cleaned) {
+          throw new Error("Empty Base64 audio payload");
+        }
+        var binary = atob(cleaned);
+        var len = binary.length;
+        var buffer = new ArrayBuffer(len);
+        var view = new Uint8Array(buffer);
+        for (var i = 0; i < len; i++) {
+          view[i] = binary.charCodeAt(i);
+        }
+        return buffer;
+      }
+
+      function ensureExactArrayBuffer(input) {
+        if (input instanceof ArrayBuffer) {
+          return input.slice(0);
+        }
+        if (ArrayBuffer.isView(input)) {
+          var view = input;
+          return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+        }
+        throw new Error("Unsupported audio buffer type");
+      }
+
+      function decodeAudioDataSafe(ctx, arrayBuffer, mime) {
+        var exact = ensureExactArrayBuffer(arrayBuffer);
+        return new Promise(function (resolve, reject) {
+          ctx.decodeAudioData(
+            exact,
+            function (decoded) {
+              resolve(decoded);
+            },
+            function (err) {
+              reject(err || new Error("decodeAudioData failed"));
+            }
+          );
+        }).catch(function (firstErr) {
+          var blob = new Blob([exact], { type: mime || "audio/mpeg" });
+          var objectUrl = URL.createObjectURL(blob);
+          return fetch(objectUrl)
+            .then(function (res) {
+              return res.arrayBuffer();
+            })
+            .then(function (fetched) {
+              URL.revokeObjectURL(objectUrl);
+              return new Promise(function (resolve, reject) {
+                ctx.decodeAudioData(
+                  fetched.slice(0),
+                  resolve,
+                  function (err) {
+                    reject(err || firstErr);
+                  }
+                );
+              });
+            })
+            .catch(function (fetchErr) {
+              try {
+                URL.revokeObjectURL(objectUrl);
+              } catch (e) { /* ignore */ }
+              return Promise.reject(fetchErr || firstErr);
+            });
+        });
+      }
+
+      function playDecodedBuffer(ctx, audioBuffer) {
+        if (!audioCtx || audioCtx !== ctx) return;
+        ttsSourceNode = ctx.createBufferSource();
+        ttsSourceNode.buffer = audioBuffer;
+        ttsSourceNode.connect(ctx.destination);
+        ttsSourceNode.onended = function () {
+          stopPatientAudio();
+        };
+        ttsSourceNode.start(0);
+      }
+
+      function playTtsFromArrayBuffer(arrayBuffer, mime) {
+        if (!isAudioPlaybackReady()) {
+          console.warn("TTS skipped: AudioContext not primed");
+          return Promise.resolve();
+        }
+        stopPatientAudio();
+        showAudioPlayingVisual();
+        var ctx = audioCtx;
+        if (ctx.state === "suspended") {
+          return ctx.resume().then(function () {
+            return playTtsFromArrayBuffer(arrayBuffer, mime);
+          });
+        }
+        return decodeAudioDataSafe(ctx, arrayBuffer, mime)
+          .then(function (audioBuffer) {
+            playDecodedBuffer(ctx, audioBuffer);
+          })
+          .catch(function (err) {
+            console.error("오디오 디코딩/재생 실패:", err, mime || "audio/mpeg");
+            stopPatientAudio();
+          });
+      }
+
+      function playTtsFromBase64(b64, mime) {
+        return playTtsFromArrayBuffer(base64ToArrayBuffer(b64), mime);
+      }
+
+      function playTtsFromUrl(url) {
+        if (!url) return Promise.resolve();
+        return fetch(url)
+          .then(function (res) {
+            if (!res.ok) throw new Error("TTS fetch failed: " + res.status);
+            return res.arrayBuffer();
+          })
+          .then(function (buf) {
+            return playTtsFromArrayBuffer(buf, "audio/mpeg");
+          });
+      }
+
+      function playTtsFromMessage(msg) {
+        if (!msg) return Promise.resolve();
+        var mime = msg.tts_mime || "audio/mpeg";
+        if (msg.tts_audio_url) {
+          return playTtsFromUrl(msg.tts_audio_url);
+        }
+        if (msg.tts_audio_b64) {
+          return playTtsFromBase64(msg.tts_audio_b64, mime);
+        }
+        if (msg.tts_format === "base64" && msg.tts_audio) {
+          return playTtsFromBase64(msg.tts_audio, mime);
+        }
+        return Promise.resolve();
       }
 
       function stopPatientAudio() {
@@ -299,39 +432,6 @@
             subtitleSpeaker.setAttribute("aria-hidden", "true");
           }
         }
-      }
-
-      function playAudioFromBase64(b64, mime) {
-        if (!b64) return Promise.resolve();
-        if (!isAudioPlaybackReady()) {
-          console.warn("TTS skipped: AudioContext not primed — tap connect button first");
-          return Promise.resolve();
-        }
-        stopPatientAudio();
-        showAudioPlayingVisual();
-        var ctx = audioCtx;
-        if (ctx.state === "suspended") {
-          return ctx.resume().then(function () {
-            return playAudioFromBase64(b64, mime);
-          });
-        }
-        var arrayBuffer = base64ToArrayBuffer(b64);
-        return ctx
-          .decodeAudioData(arrayBuffer.slice(0))
-          .then(function (audioBuffer) {
-            if (!audioCtx || audioCtx !== ctx) return;
-            ttsSourceNode = ctx.createBufferSource();
-            ttsSourceNode.buffer = audioBuffer;
-            ttsSourceNode.connect(ctx.destination);
-            ttsSourceNode.onended = function () {
-              stopPatientAudio();
-            };
-            ttsSourceNode.start(0);
-          })
-          .catch(function (err) {
-            console.error("오디오 재생 실패:", err, mime || "audio/mpeg");
-            stopPatientAudio();
-          });
       }
 
       function hasCompletedUnlockFlow() {
@@ -458,6 +558,7 @@
         wsConnectPromise = new Promise(function (resolve, reject) {
           setConnectionStatus("warn", "서버 연결 중…");
           var socket = new WebSocket(WS_URL);
+          socket.binaryType = "arraybuffer";
 
           socket.onopen = function () {
             ws = socket;
@@ -468,7 +569,28 @@
           };
 
           socket.onmessage = function (event) {
-            handleServerMessage(JSON.parse(event.data));
+            var data = event.data;
+            if (data instanceof ArrayBuffer) {
+              playTtsFromArrayBuffer(data, "audio/mpeg").catch(function (err) {
+                console.error("Binary TTS playback error", err);
+              });
+              return;
+            }
+            if (typeof Blob !== "undefined" && data instanceof Blob) {
+              data.arrayBuffer()
+                .then(function (buf) {
+                  return playTtsFromArrayBuffer(buf, data.type || "audio/mpeg");
+                })
+                .catch(function (err) {
+                  console.error("Blob TTS playback error", err);
+                });
+              return;
+            }
+            try {
+              handleServerMessage(JSON.parse(data));
+            } catch (parseErr) {
+              console.error("WebSocket JSON parse error", parseErr);
+            }
           };
 
           socket.onerror = function () {
@@ -564,12 +686,10 @@
           if (msg.detected_language_label_ko && languageLocked) {
             setDetectedBadge("detected", msg.detected_language_label_ko);
           }
-          if (msg.speaker === "doctor" && msg.tts_audio_b64) {
-            playAudioFromBase64(msg.tts_audio_b64, msg.tts_mime || "audio/mpeg").catch(
-              function (err) {
-                console.error("TTS playback error", err);
-              }
-            );
+          if (msg.speaker === "doctor" && (msg.tts_audio_b64 || msg.tts_audio_url)) {
+            playTtsFromMessage(msg).catch(function (err) {
+              console.error("TTS playback error", err);
+            });
           }
         }
       }
