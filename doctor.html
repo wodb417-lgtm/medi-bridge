@@ -171,7 +171,8 @@
       var isRecording = false;
       var isProcessing = false;
       var isPatientRecording = false;
-      var doctorRecordingActive = false;
+      var doctorRecordedChunks = [];
+      var doctorRecordingMime = "audio/webm";
 
       var SHORTCUTS_STORAGE_KEY = "medibridge-shortcuts";
       var DEFAULT_SHORTCUTS = {
@@ -380,8 +381,6 @@
         wsConnectPromise = new Promise(function (resolve, reject) {
           setConnectionStatus("warn", "서버 연결 중…");
           var socket = new WebSocket(WS_URL);
-          socket.binaryType = "arraybuffer";
-
           socket.onopen = function () {
             ws = socket;
             wsConnectPromise = null;
@@ -441,16 +440,49 @@
         ws.send(JSON.stringify(payload));
       }
 
-      /** 순수 오디오 바이너리만 WebSocket 바이너리 프레임으로 전송 */
-      function sendDoctorAudioBinary(blob) {
-        if (!doctorRecordingActive) return Promise.resolve();
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-          return Promise.reject(new Error("서버와 연결되어 있지 않습니다."));
+      function extensionForMime(mime) {
+        if (!mime) return "webm";
+        if (mime.indexOf("webm") >= 0) return "webm";
+        if (mime.indexOf("mp4") >= 0) return "mp4";
+        if (mime.indexOf("ogg") >= 0) return "ogg";
+        return "webm";
+      }
+
+      /** 녹음 완료 후 multipart/form-data POST (오디오·메타 완전 분리) */
+      function submitDoctorAudioViaForm(audioBlob) {
+        if (!audioBlob || audioBlob.size === 0) {
+          return Promise.reject(new Error("녹음된 오디오가 없습니다."));
         }
-        if (!blob || blob.size === 0) return Promise.resolve();
-        return blob.arrayBuffer().then(function (buffer) {
-          if (!doctorRecordingActive) return;
-          ws.send(buffer);
+        var formData = new FormData();
+        var ext = extensionForMime(doctorRecordingMime);
+        formData.append("audio", audioBlob, "query_audio." + ext);
+        formData.append("department", getDepartmentCode());
+        formData.append("target_lang", getPatientTargetLangCode());
+        if (languageSelect.value) {
+          formData.append("manual_lang", languageSelect.value);
+        }
+        return fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        }).then(function (res) {
+          if (!res.ok) {
+            return res.json().then(function (body) {
+              var detail = body && body.detail;
+              var msg =
+                typeof detail === "string"
+                  ? detail
+                  : Array.isArray(detail)
+                    ? detail.map(function (d) { return d.msg || d; }).join(", ")
+                    : res.statusText || "전송 실패";
+              throw new Error(msg);
+            }).catch(function (parseErr) {
+              if (parseErr.message && parseErr.message !== "Unexpected token") {
+                throw parseErr;
+              }
+              throw new Error(res.statusText || "전송 실패");
+            });
+          }
+          return res.json();
         });
       }
 
@@ -510,15 +542,6 @@
         syncDepartmentToServer();
       }
 
-      function buildSessionStartMeta(speaker) {
-        return {
-          type: "start",
-          speaker: speaker,
-          target_lang: getPatientTargetLangCode(),
-          manual_lang: languageSelect.value || null,
-        };
-      }
-
       function syncDepartmentMetaOnly() {
         sendDoctorMeta({ type: "set_department", department: getDepartmentCode() });
       }
@@ -532,18 +555,14 @@
 
         audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         var mimeType = getSupportedMimeType();
+        doctorRecordingMime = mimeType || "audio/webm";
+        doctorRecordedChunks = [];
         var options = mimeType ? { mimeType: mimeType } : undefined;
         mediaRecorder = new MediaRecorder(audioStream, options);
 
-        syncDepartmentMetaOnly();
-        sendDoctorMeta(buildSessionStartMeta("doctor"));
-        doctorRecordingActive = true;
-
         mediaRecorder.ondataavailable = function (event) {
           if (!event.data || event.data.size === 0) return;
-          sendDoctorAudioBinary(event.data).catch(function (err) {
-            console.error(err);
-          });
+          doctorRecordedChunks.push(event.data);
         };
 
         mediaRecorder.start(250);
@@ -568,14 +587,20 @@
             audioStream.getTracks().forEach(function (t) { t.stop(); });
             audioStream = null;
           }
-          try {
-            doctorRecordingActive = false;
-            sendDoctorMeta({ type: "end" });
-          } catch (err) {
-            isProcessing = false;
-            hideProcessingOverlay();
-            alert(err.message || "전송에 실패했습니다.");
-          }
+          var chunks = doctorRecordedChunks.slice();
+          doctorRecordedChunks = [];
+          var blob = new Blob(chunks, { type: doctorRecordingMime });
+          submitDoctorAudioViaForm(blob)
+            .then(function () {
+              /* 결과·TTS는 WebSocket broadcast로 수신 */
+            })
+            .catch(function (err) {
+              isProcessing = false;
+              activeSpeaker = null;
+              activeButton = null;
+              hideProcessingOverlay();
+              alert(err.message || "전송에 실패했습니다.");
+            });
         };
 
         if (recorder.state !== "inactive") recorder.stop();
