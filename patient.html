@@ -114,19 +114,9 @@
 
   <script>
     (function () {
-      /** iOS Safari: 사용자 제스처로 1회 승인받은 뒤 TTS는 이 객체만 재사용 */
-      var globalAudio = new Audio();
-      globalAudio.setAttribute("playsinline", "true");
-      globalAudio.setAttribute("webkit-playsinline", "true");
-      globalAudio.preload = "auto";
-      globalAudio.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none";
-      if (document.body) {
-        document.body.appendChild(globalAudio);
-      } else {
-        document.addEventListener("DOMContentLoaded", function () {
-          document.body.appendChild(globalAudio);
-        });
-      }
+      /** iOS Safari: WebSocket TTS는 Web Audio API(AudioContext)로만 재생 */
+      var audioCtx = null;
+      var ttsSourceNode = null;
 
       var WS_URL = MediBridgeWs.getWebSocketUrl();
 
@@ -194,7 +184,7 @@
       }
 
       async function startRemotePatientRecording() {
-        if (isRemoteRecording || !isAudioUnlocked()) return;
+        if (isRemoteRecording || !hasCompletedUnlockFlow()) return;
         await connectWebSocket();
         await preparePatientMic();
         var mimeType = getSupportedMimeType();
@@ -246,15 +236,33 @@
         detectedLangValue.textContent = valueText;
       }
 
+      function base64ToArrayBuffer(b64) {
+        var binary = atob(b64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes.buffer;
+      }
+
       function stopPatientAudio() {
-        globalAudio.onended = null;
-        globalAudio.onerror = null;
-        try {
-          globalAudio.pause();
-        } catch (e) { /* ignore */ }
+        if (ttsSourceNode) {
+          ttsSourceNode.onended = null;
+          try {
+            ttsSourceNode.stop(0);
+          } catch (e) { /* ignore */ }
+          try {
+            ttsSourceNode.disconnect();
+          } catch (e) { /* ignore */ }
+          ttsSourceNode = null;
+        }
         if (subtitleBody) {
           subtitleBody.classList.remove("is-audio-playing");
         }
+      }
+
+      function isAudioPlaybackReady() {
+        return !!audioCtx && audioCtx.state !== "closed";
       }
 
       function showAudioPlayingVisual() {
@@ -294,34 +302,48 @@
       }
 
       function playAudioFromBase64(b64, mime) {
-        if (!b64) return;
-        if (!isAudioUnlocked()) {
-          console.warn("TTS skipped: audio not unlocked yet");
-          return;
+        if (!b64) return Promise.resolve();
+        if (!isAudioPlaybackReady()) {
+          console.warn("TTS skipped: AudioContext not primed — tap connect button first");
+          return Promise.resolve();
         }
-        var dataUrl = "data:" + (mime || "audio/mpeg") + ";base64," + b64;
         stopPatientAudio();
-        globalAudio.volume = 1;
-        globalAudio.src = dataUrl;
-        globalAudio.onended = function () {
-          stopPatientAudio();
-        };
-        globalAudio.onerror = function () {
-          console.error("Audio playback failed");
-          stopPatientAudio();
-        };
         showAudioPlayingVisual();
-        try {
-          globalAudio.load();
-        } catch (e) { /* ignore */ }
-        globalAudio.play().catch(function (err) {
-          console.error("오디오 재생 실패:", err);
-          stopPatientAudio();
-        });
+        var ctx = audioCtx;
+        if (ctx.state === "suspended") {
+          return ctx.resume().then(function () {
+            return playAudioFromBase64(b64, mime);
+          });
+        }
+        var arrayBuffer = base64ToArrayBuffer(b64);
+        return ctx
+          .decodeAudioData(arrayBuffer.slice(0))
+          .then(function (audioBuffer) {
+            if (!audioCtx || audioCtx !== ctx) return;
+            ttsSourceNode = ctx.createBufferSource();
+            ttsSourceNode.buffer = audioBuffer;
+            ttsSourceNode.connect(ctx.destination);
+            ttsSourceNode.onended = function () {
+              stopPatientAudio();
+            };
+            ttsSourceNode.start(0);
+          })
+          .catch(function (err) {
+            console.error("오디오 재생 실패:", err, mime || "audio/mpeg");
+            stopPatientAudio();
+          });
+      }
+
+      function hasCompletedUnlockFlow() {
+        return audioUnlocked || localStorage.getItem(AUDIO_UNLOCK_KEY) === "true";
       }
 
       function isAudioUnlocked() {
-        return audioUnlocked || localStorage.getItem(AUDIO_UNLOCK_KEY) === "true";
+        return hasCompletedUnlockFlow() && isAudioPlaybackReady();
+      }
+
+      function needsAudioUnlockOverlay() {
+        return !hasCompletedUnlockFlow() || !isAudioPlaybackReady();
       }
 
       function hideAudioUnlockOverlay() {
@@ -342,35 +364,33 @@
       }
 
       function unlockPatientAudio() {
-        return new Promise(function (resolve, reject) {
-          globalAudio.volume = 0.01;
-          globalAudio.src = SILENT_AUDIO_WAV;
-          try {
-            globalAudio.load();
-          } catch (e) { /* ignore */ }
-          var finish = function () {
-            try {
-              globalAudio.pause();
-              globalAudio.currentTime = 0;
-            } catch (e) { /* ignore */ }
-            globalAudio.volume = 1;
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) {
+          return Promise.reject(new Error("이 기기는 Web Audio API를 지원하지 않습니다."));
+        }
+        audioCtx = new Ctx();
+        return audioCtx
+          .resume()
+          .then(function () {
+            return fetch(SILENT_AUDIO_WAV).then(function (res) {
+              return res.arrayBuffer();
+            });
+          })
+          .then(function (buf) {
+            if (!audioCtx) throw new Error("AudioContext lost");
+            return audioCtx.decodeAudioData(buf);
+          })
+          .then(function (silentBuffer) {
+            if (!audioCtx) throw new Error("AudioContext lost");
+            var src = audioCtx.createBufferSource();
+            src.buffer = silentBuffer;
+            src.connect(audioCtx.destination);
+            src.start(0);
             audioUnlocked = true;
             try {
               localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
             } catch (e) { /* ignore */ }
-            resolve();
-          };
-          var p = globalAudio.play();
-          if (p && typeof p.then === "function") {
-            p.then(function () {
-              setTimeout(finish, 120);
-            }).catch(function (err) {
-              reject(err || new Error("스피커 오디오 재생에 실패했습니다."));
-            });
-          } else {
-            setTimeout(finish, 120);
-          }
-        });
+          });
       }
 
       function showWelcomeScreen(options) {
@@ -545,7 +565,11 @@
             setDetectedBadge("detected", msg.detected_language_label_ko);
           }
           if (msg.speaker === "doctor" && msg.tts_audio_b64) {
-            playAudioFromBase64(msg.tts_audio_b64, msg.tts_mime || "audio/mpeg");
+            playAudioFromBase64(msg.tts_audio_b64, msg.tts_mime || "audio/mpeg").catch(
+              function (err) {
+                console.error("TTS playback error", err);
+              }
+            );
           }
         }
       }
@@ -570,13 +594,13 @@
         });
       }
 
-      if (isAudioUnlocked()) {
+      if (needsAudioUnlockOverlay()) {
+        showAudioUnlockOverlay();
+      } else {
         audioUnlocked = true;
         hideAudioUnlockOverlay();
         showWelcomeScreen();
         preparePatientMic().catch(function () { /* 권한 재요청 필요 시 unlock UI */ });
-      } else {
-        showAudioUnlockOverlay();
       }
       connectWebSocket().catch(function () {});
     })();

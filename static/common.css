@@ -1504,6 +1504,7 @@ html, body {
   }
 }
 
+.speak-btn__hint,
 .speak-btn__shortcut-label {
   font-size: 0.72em;
   font-weight: 600;
