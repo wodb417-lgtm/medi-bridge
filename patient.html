@@ -114,6 +114,20 @@
 
   <script>
     (function () {
+      /** iOS Safari: 사용자 제스처로 1회 승인받은 뒤 TTS는 이 객체만 재사용 */
+      var globalAudio = new Audio();
+      globalAudio.setAttribute("playsinline", "true");
+      globalAudio.setAttribute("webkit-playsinline", "true");
+      globalAudio.preload = "auto";
+      globalAudio.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none";
+      if (document.body) {
+        document.body.appendChild(globalAudio);
+      } else {
+        document.addEventListener("DOMContentLoaded", function () {
+          document.body.appendChild(globalAudio);
+        });
+      }
+
       var WS_URL = MediBridgeWs.getWebSocketUrl();
 
       var welcomeScreen = document.getElementById("welcome-screen");
@@ -138,9 +152,7 @@
       var audioUnlocked = false;
       var ws = null;
       var wsConnectPromise = null;
-      var unlockAudioEl = null;
 
-      var currentAudio = null;
       var micStream = null;
       var micRecorder = null;
       var isRemoteRecording = false;
@@ -235,14 +247,11 @@
       }
 
       function stopPatientAudio() {
-        if (currentAudio) {
-          currentAudio.onended = null;
-          currentAudio.onerror = null;
-          currentAudio.pause();
-          currentAudio.removeAttribute("src");
-          currentAudio.load();
-          currentAudio = null;
-        }
+        globalAudio.onended = null;
+        globalAudio.onerror = null;
+        try {
+          globalAudio.pause();
+        } catch (e) { /* ignore */ }
         if (subtitleBody) {
           subtitleBody.classList.remove("is-audio-playing");
         }
@@ -286,19 +295,27 @@
 
       function playAudioFromBase64(b64, mime) {
         if (!b64) return;
-        stopPatientAudio();
+        if (!isAudioUnlocked()) {
+          console.warn("TTS skipped: audio not unlocked yet");
+          return;
+        }
         var dataUrl = "data:" + (mime || "audio/mpeg") + ";base64," + b64;
-        currentAudio = new Audio(dataUrl);
-        currentAudio.onended = function () {
+        stopPatientAudio();
+        globalAudio.volume = 1;
+        globalAudio.src = dataUrl;
+        globalAudio.onended = function () {
           stopPatientAudio();
         };
-        currentAudio.onerror = function () {
+        globalAudio.onerror = function () {
           console.error("Audio playback failed");
           stopPatientAudio();
         };
         showAudioPlayingVisual();
-        currentAudio.play().catch(function (err) {
-          console.error("Audio play() rejected", err);
+        try {
+          globalAudio.load();
+        } catch (e) { /* ignore */ }
+        globalAudio.play().catch(function (err) {
+          console.error("오디오 재생 실패:", err);
           stopPatientAudio();
         });
       }
@@ -326,16 +343,24 @@
 
       function unlockPatientAudio() {
         return new Promise(function (resolve, reject) {
-          if (!unlockAudioEl) unlockAudioEl = new Audio(SILENT_AUDIO_WAV);
-          unlockAudioEl.volume = 0.01;
+          globalAudio.volume = 0.01;
+          globalAudio.src = SILENT_AUDIO_WAV;
+          try {
+            globalAudio.load();
+          } catch (e) { /* ignore */ }
           var finish = function () {
+            try {
+              globalAudio.pause();
+              globalAudio.currentTime = 0;
+            } catch (e) { /* ignore */ }
+            globalAudio.volume = 1;
             audioUnlocked = true;
             try {
               localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
             } catch (e) { /* ignore */ }
             resolve();
           };
-          var p = unlockAudioEl.play();
+          var p = globalAudio.play();
           if (p && typeof p.then === "function") {
             p.then(function () {
               setTimeout(finish, 120);
