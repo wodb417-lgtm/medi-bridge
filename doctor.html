@@ -177,7 +177,10 @@
       var btnSettingsSave = document.getElementById("btn-settings-save");
       var btnSettingsClose = document.getElementById("btn-settings-close");
       var doctorShortcutLabel = document.getElementById("doctor-shortcut-label");
-      var patientToggleBusy = false;
+
+      var ACTION_DEBOUNCE_MS = 500;
+      var actionDebounceAt = { patientToggle: 0, doctorShortcutToggle: 0 };
+      var pageEventsBound = false;
 
       var pendingShortcuts = { doctor: null, patient: null };
       var capturingInput = null;
@@ -251,8 +254,14 @@
         });
       }
 
-      languageSelect.addEventListener("change", onLanguageSelectChange);
       applyUnlockedUI();
+
+      function acceptActionDebounce(action) {
+        var now = Date.now();
+        if (now - actionDebounceAt[action] < ACTION_DEBOUNCE_MS) return false;
+        actionDebounceAt[action] = now;
+        return true;
+      }
 
       function setText(el, text) {
         el.textContent = text;
@@ -527,11 +536,8 @@
       }
 
       function togglePatientRemoteRecording(btn) {
-        if (patientToggleBusy || isProcessing || isRecording) return;
-        patientToggleBusy = true;
-        setTimeout(function () {
-          patientToggleBusy = false;
-        }, 450);
+        if (!acceptActionDebounce("patientToggle")) return;
+        if (isProcessing || isRecording) return;
         if (!isPatientRecording) {
           startPatientRemoteRecording(btn);
         } else {
@@ -648,6 +654,7 @@
       }
 
       function toggleDoctorSpeak(btn) {
+        if (!acceptActionDebounce("doctorShortcutToggle")) return;
         if (isProcessing || isPatientRecording) return;
         if (isRecording && activeSpeaker === "doctor") {
           endDoctorSpeak();
@@ -655,29 +662,6 @@
           beginDoctorSpeak(btn);
         }
       }
-
-      btnDoctor.addEventListener("mousedown", function (e) {
-        e.preventDefault();
-        beginDoctorSpeak(btnDoctor);
-      });
-
-      btnPatient.addEventListener("click", function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        togglePatientRemoteRecording(btnPatient);
-      });
-
-      window.addEventListener("mouseup", function () {
-        endDoctorSpeak();
-      });
-
-      btnReset.addEventListener("click", function () {
-        connectWebSocket().then(function () {
-          sendWs({ type: "reset" });
-        }).catch(function () {
-          alert("서버에 연결할 수 없습니다.");
-        });
-      });
 
       function isTypingTarget(el) {
         if (!el) return false;
@@ -814,19 +798,6 @@
 
       applyShortcuts(loadShortcutsFromStorage());
 
-      btnSettings.addEventListener("click", openSettingsModal);
-      btnSettingsClose.addEventListener("click", closeSettingsModal);
-      settingsModal.querySelectorAll("[data-close-modal]").forEach(function (el) {
-        el.addEventListener("click", closeSettingsModal);
-      });
-
-      shortcutDoctorInput.addEventListener("click", function () {
-        startCapture(shortcutDoctorInput, "doctor");
-      });
-      shortcutPatientInput.addEventListener("click", function () {
-        startCapture(shortcutPatientInput, "patient");
-      });
-
       function handleShortcutCapture(e) {
         if (!capturingInput) return;
         e.preventDefault();
@@ -846,39 +817,82 @@
         shortcutPatientInput.classList.remove("is-capturing");
       }
 
-      shortcutDoctorInput.addEventListener("keydown", handleShortcutCapture);
-      shortcutPatientInput.addEventListener("keydown", handleShortcutCapture);
+      function bindPageEventsOnce() {
+        if (pageEventsBound) return;
+        pageEventsBound = true;
 
-      btnSettingsSave.addEventListener("click", function () {
-        shortcuts.doctor = cloneBinding(pendingShortcuts.doctor);
-        shortcuts.patient = cloneBinding(pendingShortcuts.patient);
-        saveShortcutsToStorage();
-        updateShortcutLabels();
-        closeSettingsModal();
-      });
+        languageSelect.onchange = onLanguageSelectChange;
 
-      window.addEventListener("keydown", function (e) {
-        if (settingsModal.classList.contains("is-open")) {
-          if (e.key === "Escape") closeSettingsModal();
-          return;
-        }
-        if (isTypingTarget(e.target)) return;
-
-        if (keyMatches(e, shortcuts.doctor) && !e.repeat) {
+        btnDoctor.onmousedown = function (e) {
           e.preventDefault();
-          toggleDoctorSpeak(btnDoctor);
-          return;
-        }
+          beginDoctorSpeak(btnDoctor);
+        };
 
-        if (keyMatches(e, shortcuts.patient) && !e.repeat) {
+        btnPatient.onclick = function (e) {
           e.preventDefault();
           togglePatientRemoteRecording(btnPatient);
-        }
-      });
+        };
 
-      window.addEventListener("blur", function () {
-        endDoctorSpeak();
-      });
+        window.onmouseup = function () {
+          endDoctorSpeak();
+        };
+
+        btnReset.onclick = function () {
+          connectWebSocket().then(function () {
+            sendWs({ type: "reset" });
+          }).catch(function () {
+            alert("서버에 연결할 수 없습니다.");
+          });
+        };
+
+        btnSettings.onclick = openSettingsModal;
+        btnSettingsClose.onclick = closeSettingsModal;
+        settingsModal.querySelectorAll("[data-close-modal]").forEach(function (el) {
+          el.onclick = closeSettingsModal;
+        });
+
+        shortcutDoctorInput.onclick = function () {
+          startCapture(shortcutDoctorInput, "doctor");
+        };
+        shortcutPatientInput.onclick = function () {
+          startCapture(shortcutPatientInput, "patient");
+        };
+        shortcutDoctorInput.onkeydown = handleShortcutCapture;
+        shortcutPatientInput.onkeydown = handleShortcutCapture;
+
+        btnSettingsSave.onclick = function () {
+          shortcuts.doctor = cloneBinding(pendingShortcuts.doctor);
+          shortcuts.patient = cloneBinding(pendingShortcuts.patient);
+          saveShortcutsToStorage();
+          updateShortcutLabels();
+          closeSettingsModal();
+        };
+
+        window.onkeydown = function (e) {
+          if (settingsModal.classList.contains("is-open")) {
+            if (e.key === "Escape") closeSettingsModal();
+            return;
+          }
+          if (isTypingTarget(e.target)) return;
+
+          if (keyMatches(e, shortcuts.doctor) && !e.repeat) {
+            e.preventDefault();
+            toggleDoctorSpeak(btnDoctor);
+            return;
+          }
+
+          if (keyMatches(e, shortcuts.patient) && !e.repeat) {
+            e.preventDefault();
+            togglePatientRemoteRecording(btnPatient);
+          }
+        };
+
+        window.onblur = function () {
+          endDoctorSpeak();
+        };
+      }
+
+      bindPageEventsOnce();
     })();
   </script>
 </body>

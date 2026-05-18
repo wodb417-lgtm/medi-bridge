@@ -877,9 +877,25 @@
         return wsConnectPromise;
       }
 
-      if (btnAudioUnlock) {
-        btnAudioUnlock.addEventListener("click", function (e) {
+      var ACTION_DEBOUNCE_MS = 500;
+      var actionDebounceAt = { unlockClick: 0 };
+      var pageEventsBound = false;
+
+      function acceptActionDebounce(action) {
+        var now = Date.now();
+        if (now - actionDebounceAt[action] < ACTION_DEBOUNCE_MS) return false;
+        actionDebounceAt[action] = now;
+        return true;
+      }
+
+      function bindPageEventsOnce() {
+        if (pageEventsBound) return;
+        pageEventsBound = true;
+
+        if (!btnAudioUnlock) return;
+        btnAudioUnlock.onclick = function (e) {
           e.preventDefault();
+          if (!acceptActionDebounce("unlockClick")) return;
           if (btnAudioUnlock.disabled) return;
           btnAudioUnlock.disabled = true;
           btnAudioUnlock.classList.remove("is-connected");
@@ -896,8 +912,10 @@
             }
             updateClinicConnectionUI(false);
           });
-        });
+        };
       }
+
+      bindPageEventsOnce();
 
       if (needsAudioUnlockOverlay()) {
         showAudioUnlockOverlay();
