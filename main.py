@@ -169,6 +169,13 @@ GPT_CHAT_MODEL = "gpt-4o-mini"
 DEPARTMENT_CODES = frozenset({"internal", "ortho", "ent"})
 DEFAULT_DEPARTMENT = "internal"
 
+# Whisper: 경남·경북(경상) 사투리 + 진료실 의학 용어 힌트 (의사 발화 STT)
+WHISPER_GYEONGSANG_DIALECT_PROMPT = (
+    "이 음성은 경상도 사투리 억양이 강한 진료실 대화입니다. "
+    "장염, 위염, 복통, 처방, 약, 맞나, 아이가, 했다이가, 증상, 내원, "
+    "할딱거림, 우리하게, 새하다, 디이소, 투약, 소화불량, 부종, 골절."
+)
+
 # Whisper soft-bias: 과별 콘텍스트 팩 (힌트일 뿐 — 명확한 타과 발화는 억지 보정 금지)
 WHISPER_SOFT_BIAS_SUFFIX = (
     " 이 힌트는 느슨한 가중치일 뿐입니다. "
@@ -216,14 +223,20 @@ Treat the full utterance as medical consultation mode if ANY of the following ap
 - Clinical cue words appear (examples, not exhaustive): 배, 통증, 약, 증상, 진찰, 주사, 처방, 검사, 수술, 염증, 열, 기침, 호흡, 혈압, 부종, 골절, 위염, 장염, 메스꺼움, 어지럼, 처방, 복용, 입원, 퇴원.
 - The overall flow reads like bedside or outpatient clinical communication rather than casual small talk.
 
+### Medical context filter (의료 문맥 필터) — STT homophone repair
+When the utterance is clearly about **symptoms, diagnosis, prescription, medication timing, or follow-up care**:
+1. Read the ENTIRE sentence; treat Whisper output as possibly wrong on near-homophone words.
+2. **Mandatory check:** If you see "작년" (last year) but surrounding context is clinical (e.g., diagnosis explanation, "입니다/예요", 배·장·염·증상·약·처방·식후·복용), correct to **"장염"** (enteritis) or the most fitting medical term — NOT calendar time.
+3. Apply the same logic to all similar confusions (illustrative only):
+   - 장염 ↔ 작년, 부종 ↔ 부정, 골절 ↔ 고절, 위염 ↔ 위험, 복통-related confusions, etc.
+4. Use medical co-occurrence: body site, duration, severity, and typical presentation guide correction.
+5. Do not over-correct when the sentence is genuinely about time or personal history (see below).
+6. Never add clinical facts not supported by the corrected reading.
+
 ### In medical consultation mode — proactive homophone / near-homophone correction
 1. Read the ENTIRE sentence and infer the doctor's most likely intended clinical meaning.
-2. Where a word is medically implausible but sounds like a standard medical term, silently replace it with the contextually appropriate medical term.
-   Illustrative patterns only (apply the same logic to ALL similar cases, not only these):
-   - 장염 ↔ 작년, 부종 ↔ 부정, 골절 ↔ 고절, 위염 ↔ 위험, 복통 ↔ 복통-related confusions, etc.
-3. Use medical co-occurrence: neighboring words about body site, duration, severity, and typical presentation should guide correction.
-4. Do not over-correct: if multiple readings remain equally plausible, prefer the reading that fits the rest of the clinical sentence.
-5. Never add new clinical facts (new symptoms, drugs, or diagnoses) that the corrected reading does not support.
+2. Where a word is medically implausible but sounds like a standard medical term, silently replace it with the contextually appropriate medical term before translating.
+3. Gyeongsang dialect STT noise: normalize endings and particles (e.g., 했다이가→하였습니다, 맞나→맞습니까/드셨습니까 by context) while preserving meaning.
 
 ### When to KEEP everyday / non-clinical wording
 Do NOT force medical terms when the doctor clearly speaks about non-clinical context:
@@ -240,14 +253,16 @@ C. Dialect & colloquial normalization (section below).
 D. Hospital medical dictionary mappings (section below).
 E. Translate into the target language only.
 
-## Gyeongsang dialect & colloquial Korean normalization (when source is Korean)
-Before translating, mentally normalize regional/colloquial Korean into standard clinical Korean meaning:
+## Gyeongsang (경남·경북) dialect & colloquial Korean normalization (when source is Korean)
+Before translating, normalize 경상도 사투리 and colloquial clinic speech into standard clinical Korean:
 - "디이소/디였다" → "되었습니다" (past tense / completion in context)
 - "할딱거린다" → "호흡 곤란" or "숨이 가쁩니다" (dyspnea)
 - "우리하게 아프다" → "지속적인 둔한 통증이 있습니다"
 - "새하다" → "시리고 알싸한 통증이 있습니다"
 - "에린다" → "쑤시고 아픕니다"
-- "-했심더", "-능교" and similar endings → infer standard past/polite clinical tense from context
+- "했다이가/했심더" → standard past polite clinical tense (e.g., 하였습니다, 되었습니다)
+- "맞나" (medication context) → "맞습니까" / "드셨습니까" / "복용하셨습니까" by context
+- "-했심더", "-능교", "-나요(사투리 억양)" → infer standard polite clinical tense from context
 - Other unclear dialect: choose the most likely standard medical Korean equivalent without adding new facts.
 
 ## Hospital custom medical dictionary (anti-mistranslation)
@@ -306,10 +321,17 @@ def resolve_department(code: str | None) -> str:
 
 
 def build_whisper_doctor_prompt(department: str | None = None) -> str:
-    """과별 Whisper prompt + soft-bias suffix."""
+    """경상 사투리 + 과별 Whisper prompt + soft-bias suffix."""
     dept = resolve_department(department or current_session_department)
-    core = WHISPER_DEPARTMENT_PROMPTS.get(dept, WHISPER_DEPARTMENT_PROMPTS[DEFAULT_DEPARTMENT])
-    return core + WHISPER_SOFT_BIAS_SUFFIX
+    dept_core = WHISPER_DEPARTMENT_PROMPTS.get(
+        dept, WHISPER_DEPARTMENT_PROMPTS[DEFAULT_DEPARTMENT]
+    )
+    return (
+        WHISPER_GYEONGSANG_DIALECT_PROMPT
+        + " "
+        + dept_core
+        + WHISPER_SOFT_BIAS_SUFFIX
+    )
 
 
 def reset_session_language() -> None:
@@ -519,8 +541,9 @@ def translate_text(
             "no infantile tone; preserve the doctor's professional weight.\n\n"
             "Follow the system prompt pipeline strictly:\n"
             "STEP A — Medical consultation mode: judge the whole sentence; if clinical, proceed with STT repair.\n"
-            "STEP B — Whisper STT repair: fix phonetically confused non-medical words into the most likely "
-            "medical terms using full-sentence context; preserve true everyday words (e.g. real '작년').\n"
+            "STEP B — Medical context filter: if symptoms/prescription context applies and STT wrote '작년', "
+            "correct to '장염' (or fitting term); fix all similar homophones; keep real time references only "
+            "when the sentence is clearly non-clinical (e.g. travel last year).\n"
             "STEP C — Dialect & colloquial normalization (Korean → standard clinical Korean):\n"
             '  • "디이소/디였다" → 되었습니다 (contextual past/completion)\n'
             '  • "할딱거린다" → 호흡 곤란 / 숨이 가쁩니다\n'
