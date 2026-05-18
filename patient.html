@@ -210,14 +210,12 @@
         if (!isRemoteRecording || !micRecorder) return;
         isRemoteRecording = false;
         hideRecordingPrompt();
-        showProcessingOverlay();
         var recorder = micRecorder;
         micRecorder = null;
         recorder.onstop = function () {
           try {
             sendPatientWs({ type: "patient_audio", phase: "end" });
           } catch (err) {
-            hideProcessingOverlay();
             console.error(err);
           }
         };
@@ -313,10 +311,12 @@
         if (!audioUnlockOverlay) return;
         audioUnlockOverlay.classList.add("is-dismissed");
         audioUnlockOverlay.setAttribute("aria-hidden", "true");
+        audioUnlockOverlay.style.display = "none";
       }
 
       function showAudioUnlockOverlay() {
         if (!audioUnlockOverlay) return;
+        audioUnlockOverlay.style.display = "";
         audioUnlockOverlay.classList.remove("is-dismissed");
         audioUnlockOverlay.setAttribute("aria-hidden", "false");
         welcomeScreen.classList.add("is-hidden");
@@ -325,10 +325,10 @@
       }
 
       function unlockPatientAudio() {
-        return new Promise(function (resolve) {
+        return new Promise(function (resolve, reject) {
           if (!unlockAudioEl) unlockAudioEl = new Audio(SILENT_AUDIO_WAV);
           unlockAudioEl.volume = 0.01;
-          var done = function () {
+          var finish = function () {
             audioUnlocked = true;
             try {
               localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
@@ -338,16 +338,19 @@
           var p = unlockAudioEl.play();
           if (p && typeof p.then === "function") {
             p.then(function () {
-              setTimeout(done, 120);
-            }).catch(done);
+              setTimeout(finish, 120);
+            }).catch(function (err) {
+              reject(err || new Error("스피커 오디오 재생에 실패했습니다."));
+            });
           } else {
-            setTimeout(done, 120);
+            setTimeout(finish, 120);
           }
         });
       }
 
-      function showWelcomeScreen() {
-        if (!isAudioUnlocked()) {
+      function showWelcomeScreen(options) {
+        var skipUnlockCheck = options && options.skipUnlockCheck;
+        if (!skipUnlockCheck && !isAudioUnlocked()) {
           showAudioUnlockOverlay();
           return;
         }
@@ -444,6 +447,15 @@
       function handleServerMessage(msg) {
         if (msg.type === "registered" || msg.type === "pong") return;
 
+        if (msg.status === "translating") {
+          hideRecordingPrompt();
+          showProcessingOverlay();
+          if (languageLocked) {
+            setDetectedBadge("detecting", "처리 중…");
+          }
+          return;
+        }
+
         if (msg.type === "remote_patient_record") {
           if (!isAudioUnlocked()) return;
           if (msg.phase === "start") {
@@ -515,16 +527,20 @@
       if (btnAudioUnlock) {
         btnAudioUnlock.addEventListener("click", function () {
           btnAudioUnlock.disabled = true;
-          unlockPatientAudio()
-            .then(function () { return preparePatientMic(); })
-            .then(function () {
+          (async function () {
+            try {
+              await unlockPatientAudio();
+              await preparePatientMic();
+            } catch (error) {
+              var message =
+                error && error.message ? error.message : String(error || "알 수 없는 오류");
+              alert("오디오/마이크 에러: " + message);
+            } finally {
               hideAudioUnlockOverlay();
-              showWelcomeScreen();
-            })
-            .catch(function () {
+              showWelcomeScreen({ skipUnlockCheck: true });
               btnAudioUnlock.disabled = false;
-              alert("스피커·마이크 권한을 허용해 주세요.");
-            });
+            }
+          })();
         });
       }
 

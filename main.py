@@ -34,6 +34,7 @@ LANG_LABEL_KO: dict[str, str] = {
     "en": "영어",
     "vi": "베트남어",
     "zh": "중국어",
+    "ja": "일본어",
     "th": "태국어",
     "uz": "우즈베크어",
     "id": "인도네시아어",
@@ -48,6 +49,7 @@ LANG_NAMES: dict[str, str] = {
     "en": "English",
     "vi": "Vietnamese",
     "zh": "Chinese",
+    "ja": "Japanese",
     "th": "Thai",
     "uz": "Uzbek",
     "id": "Indonesian",
@@ -58,10 +60,29 @@ LANG_NAMES: dict[str, str] = {
     "ko": "Korean",
 }
 
-WHISPER_ALIASES: dict[str, str] = {
+APP_LANG_CODES: frozenset[str] = frozenset(LANG_LABEL_KO.keys())
+
+# OpenAI Whisper (whisper-1) supported ISO 639-1 codes
+WHISPER_SUPPORTED_LANGS: frozenset[str] = frozenset(
+    {
+        "af", "ar", "hy", "as", "az", "be", "bn", "bs", "bg", "ca", "cs", "cy",
+        "da", "de", "el", "en", "es", "et", "fa", "fi", "fr", "gl", "gu", "ha",
+        "he", "hi", "hr", "hu", "id", "is", "it", "ja", "jw", "ka", "kk", "km",
+        "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml",
+        "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl",
+        "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq",
+        "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt",
+        "uk", "ur", "uz", "vi", "yi", "yo", "zh",
+    }
+)
+
+LANG_CODE_ALIASES: dict[str, str] = {
     "english": "en",
     "vietnamese": "vi",
     "chinese": "zh",
+    "mandarin": "zh",
+    "cantonese": "zh",
+    "japanese": "ja",
     "thai": "th",
     "uzbek": "uz",
     "indonesian": "id",
@@ -71,6 +92,19 @@ WHISPER_ALIASES: dict[str, str] = {
     "filipino": "tl",
     "russian": "ru",
     "korean": "ko",
+    "auto": "",
+    "unknown": "",
+    "jp": "ja",
+    "jpn": "ja",
+    "cn": "zh",
+    "chs": "zh",
+    "cht": "zh",
+    "burmese": "my",
+    "myanmar": "my",
+    # Whisper verbose_json may return full names; never truncate to unsupported "ny"
+    "ny": "",
+    "nyanja": "",
+    "chichewa": "",
 }
 
 
@@ -178,23 +212,56 @@ def reset_session_language() -> None:
 def lock_session_language(lang_code: str) -> str:
     """환자 음성에서 감지된 언어로 세션 타겟 언어 고정."""
     global current_session_lang
-    current_session_lang = normalize_lang_code(lang_code)
+    resolved = resolve_app_lang_code(lang_code, default="")
+    if not resolved:
+        resolved = DEFAULT_DOCTOR_TARGET_LANG
+    current_session_lang = resolved
     return current_session_lang
 
 
-def normalize_lang_code(code: str | None) -> str:
+def resolve_app_lang_code(code: str | None, *, default: str = "en") -> str:
+    """앱·번역·세션용 ISO 639-1 (지원 목록만 허용, 임의 2글자 절단 금지)."""
     if not code:
-        return "en"
-    lowered = code.lower().strip()
-    if lowered in LANG_LABEL_KO:
+        return default
+    lowered = str(code).lower().strip().replace("_", "-")
+    if lowered in ("", "auto", "unknown"):
+        return default
+    if lowered in APP_LANG_CODES:
         return lowered
-    if lowered in WHISPER_ALIASES:
-        return WHISPER_ALIASES[lowered]
-    if len(lowered) >= 2:
-        short = lowered[:2]
-        if short in LANG_LABEL_KO:
-            return short
-    return lowered[:2] if len(lowered) >= 2 else "en"
+    alias = LANG_CODE_ALIASES.get(lowered)
+    if alias:
+        return alias if alias in APP_LANG_CODES else default
+    if len(lowered) == 2 and lowered in APP_LANG_CODES:
+        return lowered
+    if len(lowered) >= 3:
+        prefix = lowered[:2]
+        if prefix in APP_LANG_CODES:
+            return prefix
+    logger.warning("Unsupported app language code %r → default %r", code, default)
+    return default
+
+
+def whisper_language_param(code: str | None) -> str | None:
+    """Whisper API language 인자. 불확실·미지원이면 None(자동 감지)."""
+    if not code:
+        return None
+    lowered = str(code).lower().strip()
+    if lowered in ("", "auto", "unknown"):
+        return None
+    resolved = resolve_app_lang_code(code, default="")
+    if not resolved:
+        return None
+    if resolved in WHISPER_SUPPORTED_LANGS:
+        return resolved
+    logger.warning(
+        "Language %r not supported by Whisper; omitting language parameter",
+        code,
+    )
+    return None
+
+
+def normalize_lang_code(code: str | None) -> str:
+    return resolve_app_lang_code(code, default="en")
 
 
 def label_ko_for_code(code: str) -> str:
@@ -213,20 +280,51 @@ def session_state_payload() -> dict:
     }
 
 
-def transcribe_audio(file_path: str, language_hint: str | None = None) -> tuple[str, str]:
+def transcribe_audio(
+    file_path: str,
+    language_hint: str | None = None,
+    *,
+    auto_detect_only: bool = False,
+) -> tuple[str, str]:
     kwargs: dict = {
         "model": "whisper-1",
         "response_format": "verbose_json",
     }
-    if language_hint and language_hint != "auto":
-        kwargs["language"] = normalize_lang_code(language_hint)
+    whisper_lang = None if auto_detect_only else whisper_language_param(language_hint)
+    if whisper_lang:
+        kwargs["language"] = whisper_lang
+        logger.info("Whisper transcribe with language=%s (hint=%r)", whisper_lang, language_hint)
+    else:
+        logger.info(
+            "Whisper transcribe with auto language detection (hint=%r, auto_detect_only=%s)",
+            language_hint,
+            auto_detect_only,
+        )
 
     with open(file_path, "rb") as audio_file:
         transcript = client.audio.transcriptions.create(file=audio_file, **kwargs)
 
     text = (transcript.text or "").strip()
-    detected = normalize_lang_code(getattr(transcript, "language", None) or language_hint)
+    raw_detected = getattr(transcript, "language", None)
+    detected = resolve_app_lang_code(raw_detected, default="")
+    if not detected and language_hint:
+        detected = resolve_app_lang_code(language_hint, default=DEFAULT_DOCTOR_TARGET_LANG)
+    if not detected:
+        detected = DEFAULT_DOCTOR_TARGET_LANG
     return text, detected
+
+
+def resolve_patient_target_lang(override: str | None = None) -> str:
+    """환자 모니터 표시·의사→환자 번역 타깃 언어 (의사 수동 선택 > 세션 고정 > 기본 영어)."""
+    if override:
+        lowered = str(override).lower().strip()
+        if lowered not in ("", "auto", "unknown"):
+            resolved = resolve_app_lang_code(override, default="")
+            if resolved:
+                return resolved
+    if current_session_lang:
+        return current_session_lang
+    return DEFAULT_DOCTOR_TARGET_LANG
 
 
 def translate_text(text: str, source_lang: str, target_lang: str) -> str:
@@ -237,7 +335,7 @@ def translate_text(text: str, source_lang: str, target_lang: str) -> str:
 
     if source_code == "ko":
         user_content = (
-            f"Target language: {target} (locale code: {target_code}).\n\n"
+            f"Translate the following medical text into {target} ({target_code}).\n\n"
             "Follow this two-step pipeline strictly:\n"
             "STEP 1 — Dialect & colloquial normalization (Korean → standard clinical Korean):\n"
             '  • "디이소/디였다" → 되었습니다 (contextual past/completion)\n'
@@ -248,14 +346,15 @@ def translate_text(text: str, source_lang: str, target_lang: str) -> str:
             "  • -했심더 / -능교 → infer standard polite clinical tense\n"
             "  • Apply the hospital medical dictionary mappings from the system prompt.\n"
             "STEP 2 — Translate the normalized Korean into the target language only.\n"
-            "Output ONLY the final target-language translation.\n\n"
-            f"Doctor speech (Korean, may contain dialect):\n{text}"
+            "Output ONLY the final translation.\n\n"
+            f"Medical text (Korean, may contain dialect):\n{text}"
         )
     else:
         user_content = (
-            f"Translate from {source} to {target} (target locale code: {target_code}).\n"
-            f"Apply clinical accuracy and patient-friendly phrasing.\n\n"
-            f"Source text:\n{text}"
+            f"Translate the following medical text into {target} ({target_code}).\n"
+            "Use plain, patient-friendly clinical phrasing.\n"
+            "Output ONLY the translation — no labels or explanations.\n\n"
+            f"Medical text ({source}):\n{text}"
         )
 
     response = client.chat.completions.create(
@@ -324,6 +423,8 @@ def build_ui_payload(result: dict) -> dict:
 async def process_audio_session(
     audio_bytes: bytes,
     speaker: str,
+    *,
+    target_lang: str | None = None,
 ) -> dict:
     global current_session_lang
 
@@ -339,23 +440,30 @@ async def process_audio_session(
             tmp.write(audio_bytes)
             tmp_path = tmp.name
 
-        language_hint = current_session_lang if speaker == "patient" and current_session_lang else None
-        original, detected = await asyncio.to_thread(
-            transcribe_audio, tmp_path, language_hint
-        )
+        if speaker == "doctor":
+            # 의사 발화: Whisper 자동 언어 감지 (language 파라미터 미사용)
+            original, detected_source = await asyncio.to_thread(
+                transcribe_audio, tmp_path, None, auto_detect_only=True
+            )
+        else:
+            language_hint = current_session_lang if current_session_lang else None
+            original, detected_source = await asyncio.to_thread(
+                transcribe_audio, tmp_path, language_hint
+            )
 
         if not original:
             raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
 
         if speaker == "doctor":
-            # 세션에 고정된 언어로 번역 (미고정 시 기본 영어)
-            dest_lang = (
-                current_session_lang
-                if current_session_lang
-                else DEFAULT_DOCTOR_TARGET_LANG
+            dest_lang = resolve_patient_target_lang(target_lang)
+            logger.info(
+                "Doctor speech: whisper_source=%s → translate target=%s (override=%r)",
+                detected_source,
+                dest_lang,
+                target_lang,
             )
             translated = await asyncio.to_thread(
-                translate_text, original, "ko", dest_lang
+                translate_text, original, detected_source, dest_lang
             )
             payload = build_ui_payload(
                 {
@@ -365,8 +473,8 @@ async def process_audio_session(
                     "translated": translated,
                     "detected_language": dest_lang,
                     "detected_language_label_ko": label_ko_for_code(dest_lang),
-                    "source_language": "ko",
-                    "session_lang": current_session_lang,
+                    "source_language": detected_source,
+                    "session_lang": dest_lang,
                     "language_locked": current_session_lang is not None,
                 }
             )
@@ -383,7 +491,7 @@ async def process_audio_session(
             return payload
 
         # 환자 발화: Whisper 감지 언어로 세션 Lock-in → 한국어 번역
-        locked_lang = lock_session_language(detected)
+        locked_lang = lock_session_language(detected_source)
         translated = await asyncio.to_thread(
             translate_text, original, locked_lang, "ko"
         )
@@ -481,6 +589,7 @@ async def websocket_audio(websocket: WebSocket):
                 await manager.send_to_displays(
                     {"type": "remote_patient_record", "phase": "stop"}
                 )
+                await manager.broadcast({"status": "translating"})
                 continue
 
             if msg_type == "patient_audio":
@@ -492,9 +601,6 @@ async def websocket_audio(websocket: WebSocket):
                     if data_b64:
                         patient_remote_chunks.append(base64.b64decode(data_b64))
                 elif phase == "end":
-                    await manager.broadcast(
-                        {"type": "processing", "speaker": "patient"}
-                    )
                     try:
                         result = await process_audio_session(
                             audio_bytes=b"".join(patient_remote_chunks),
@@ -524,7 +630,7 @@ async def websocket_audio(websocket: WebSocket):
                 if manager.get_role(websocket) != "doctor":
                     continue
                 lang_code = msg.get("lang_code")
-                if not lang_code:
+                if not lang_code or str(lang_code).lower().strip() in ("auto", ""):
                     continue
                 locked = lock_session_language(lang_code)
                 payload = session_state_payload()
@@ -570,7 +676,10 @@ async def websocket_audio(websocket: WebSocket):
             elif msg_type == "end":
                 if manager.get_role(websocket) != "doctor":
                     continue
-                speaker = session_meta.get("speaker", "patient")
+                speaker = session_meta.get("speaker", "doctor")
+                target_override = session_meta.get("manual_lang") or session_meta.get(
+                    "target_lang"
+                )
                 await manager.broadcast(
                     {"type": "processing", "speaker": speaker}
                 )
@@ -578,6 +687,7 @@ async def websocket_audio(websocket: WebSocket):
                     result = await process_audio_session(
                         audio_bytes=b"".join(chunks),
                         speaker=speaker,
+                        target_lang=target_override,
                     )
                     await manager.broadcast(result)
                 except Exception as exc:

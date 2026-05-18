@@ -45,6 +45,13 @@
     </div>
 
     <main class="panels-processing-wrap">
+      <div id="panels-patient-remote" class="doctor-patient-remote-overlay" aria-hidden="true">
+        <div class="doctor-patient-remote-overlay__content">
+          <span class="doctor-patient-remote-overlay__icon" aria-hidden="true">🎙️</span>
+          <span class="doctor-patient-remote-overlay__text">환자가 태블릿에 말씀하시는 중...</span>
+          <span class="doctor-patient-remote-overlay__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+      </div>
       <div id="panels-processing" class="processing-overlay" aria-hidden="true">
         <div class="processing-overlay__content">
           <span class="processing-overlay__icon" aria-hidden="true">⏳</span>
@@ -141,6 +148,7 @@
       var connectionStatusText = document.getElementById("connection-status-text");
       var micAlert = document.getElementById("mic-alert");
       var panelsProcessing = document.getElementById("panels-processing");
+      var panelsPatientRemote = document.getElementById("panels-patient-remote");
 
       var sessionLangCode = null;
       var isLanguageLocked = false;
@@ -153,6 +161,7 @@
       var activeButton = null;
       var isRecording = false;
       var isProcessing = false;
+      var isPatientRecording = false;
       var doctorKeyHeld = false;
       var patientKeyHeld = false;
 
@@ -179,6 +188,7 @@
         { code: "en", labelKo: "영어", labelFull: "영어 (English)", subtitle: "Speak and it will be translated for the doctor" },
         { code: "vi", labelKo: "베트남어", labelFull: "베트남어 (Tiếng Việt)", subtitle: "Nói và nội dung sẽ được dịch cho bác sĩ" },
         { code: "zh", labelKo: "중국어", labelFull: "중국어 (中文)", subtitle: "说话内容将翻译给医生" },
+        { code: "ja", labelKo: "일본어", labelFull: "일본어 (日本語)", subtitle: "お話しください。医師向けに翻訳されます" },
         { code: "th", labelKo: "태국어", labelFull: "태국어 (ภาษาไทย)", subtitle: "พูดแล้วจะแปลให้แพทย์ฟัง" },
         { code: "uz", labelKo: "우즈베크어", labelFull: "우즈베크어 (O'zbek)", subtitle: "Gapiring, shifokor uchun tarjima qilinadi" },
         { code: "id", labelKo: "인도네시아어", labelFull: "인도네시아어 (Bahasa Indonesia)", subtitle: "Bicara dan akan diterjemahkan untuk dokter" },
@@ -278,6 +288,19 @@
       function hideProcessingOverlay() {
         panelsProcessing.classList.remove("is-visible");
         panelsProcessing.setAttribute("aria-hidden", "true");
+      }
+
+      function showPatientRemoteOverlay() {
+        if (!panelsPatientRemote) return;
+        hideProcessingOverlay();
+        panelsPatientRemote.classList.add("is-visible");
+        panelsPatientRemote.setAttribute("aria-hidden", "false");
+      }
+
+      function hidePatientRemoteOverlay() {
+        if (!panelsPatientRemote) return;
+        panelsPatientRemote.classList.remove("is-visible");
+        panelsPatientRemote.setAttribute("aria-hidden", "true");
       }
 
       function setRecordingButton(btn, recording) {
@@ -380,8 +403,21 @@
         ws.send(JSON.stringify(payload));
       }
 
+      function getPatientTargetLangCode() {
+        var selected = languageSelect.value;
+        if (selected) return selected;
+        if (sessionLangCode) return sessionLangCode;
+        return "en";
+      }
+
       function buildSessionMeta(speaker) {
-        return { type: "start", speaker: speaker };
+        var targetLang = getPatientTargetLangCode();
+        return {
+          type: "start",
+          speaker: speaker,
+          target_lang: targetLang,
+          manual_lang: languageSelect.value || null,
+        };
       }
 
       async function startDoctorRecording(btn) {
@@ -441,34 +477,36 @@
         if (recorder.state !== "inactive") recorder.stop();
       }
 
-      var patientRemoteActive = false;
-
       function beginPatientRemote(btn) {
-        if (isProcessing || isRecording || patientRemoteActive) return;
-        connectWebSocket().then(function () {
-          patientRemoteActive = true;
-          activeSpeaker = "patient";
-          activeButton = btn;
-          setRecordingButton(btn, true);
-          setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
-          sendWs({ action: "start_patient_record" });
-        }).catch(function () {
-          alert("서버에 연결할 수 없습니다.");
-        });
+        if (isProcessing || isRecording || isPatientRecording) return;
+        isPatientRecording = true;
+        activeSpeaker = "patient";
+        activeButton = btn;
+        setRecordingButton(btn, true);
+        showPatientRemoteOverlay();
+        setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
+        connectWebSocket()
+          .then(function () {
+            sendWs({ action: "start_patient_record" });
+          })
+          .catch(function () {
+            isPatientRecording = false;
+            activeSpeaker = null;
+            activeButton = null;
+            hidePatientRemoteOverlay();
+            setRecordingButton(btn, false);
+            alert("서버에 연결할 수 없습니다.");
+          });
       }
 
       function endPatientRemote() {
-        if (!patientRemoteActive) return;
-        patientRemoteActive = false;
-        isProcessing = true;
+        if (!isPatientRecording) return;
+        isPatientRecording = false;
+        hidePatientRemoteOverlay();
         if (activeButton) setRecordingButton(activeButton, false);
-        showProcessingOverlay();
-        setDetectedBadge("detecting", "처리 중…");
         try {
           sendWs({ action: "stop_patient_record" });
         } catch (err) {
-          isProcessing = false;
-          hideProcessingOverlay();
           alert(err.message || "전송에 실패했습니다.");
         }
         activeSpeaker = null;
@@ -499,11 +537,21 @@
           return;
         }
 
+        if (msg.status === "translating") {
+          isPatientRecording = false;
+          hidePatientRemoteOverlay();
+          isProcessing = true;
+          showProcessingOverlay();
+          setDetectedBadge("detecting", "처리 중…");
+          return;
+        }
+
         if (msg.type === "reset") {
           isProcessing = false;
-          patientRemoteActive = false;
+          isPatientRecording = false;
           activeSpeaker = null;
           activeButton = null;
+          hidePatientRemoteOverlay();
           hideProcessingOverlay();
           clearAllTexts();
           if (btnPatient) setRecordingButton(btnPatient, false);
@@ -512,6 +560,7 @@
 
         if (msg.type === "processing") {
           isProcessing = true;
+          hidePatientRemoteOverlay();
           showProcessingOverlay();
           if (msg.speaker === "patient") setDetectedBadge("detecting", "처리 중…");
           return;
@@ -519,8 +568,10 @@
 
         if (msg.type === "error") {
           isProcessing = false;
+          isPatientRecording = false;
           activeSpeaker = null;
           activeButton = null;
+          hidePatientRemoteOverlay();
           hideProcessingOverlay();
           alert(msg.message || "처리 중 오류가 발생했습니다.");
           return;
@@ -528,6 +579,8 @@
 
         if (msg.type === "result") {
           isProcessing = false;
+          isPatientRecording = false;
+          hidePatientRemoteOverlay();
           hideProcessingOverlay();
           setText(doctorText, msg.doctor_text || "");
           setText(patientText, msg.patient_text || "");
@@ -547,7 +600,7 @@
 
       function beginDoctorSpeak(btn) {
         if (isProcessing) return;
-        if (isRecording || patientRemoteActive) return;
+        if (isRecording || isPatientRecording) return;
         startDoctorRecording(btn).catch(function (err) {
           isRecording = false;
           isProcessing = false;
@@ -757,7 +810,8 @@
           }
         }
 
-        if (keyMatches(e, shortcuts.patient) && !e.repeat) {
+        if (keyMatches(e, shortcuts.patient)) {
+          if (e.repeat || isPatientRecording) return;
           e.preventDefault();
           if (!patientKeyHeld) {
             patientKeyHeld = true;
