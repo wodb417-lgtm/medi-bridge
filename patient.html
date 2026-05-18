@@ -494,6 +494,7 @@
         }
 
         if (msg.type === "processing") {
+          if (msg.speaker === "patient") return;
           hideRecordingPrompt();
           showProcessingOverlay();
           if (languageLocked) {

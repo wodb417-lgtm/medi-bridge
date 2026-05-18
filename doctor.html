@@ -100,7 +100,7 @@
           </svg>
           <span class="speak-btn__label">의사 말하기 <span id="doctor-shortcut-label" class="speak-btn__shortcut-label">(Spacebar)</span></span>
         </button>
-        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" aria-pressed="false">
+        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" data-recording-label="녹음 중지하기 (딸깍)" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
           </svg>
@@ -163,7 +163,6 @@
       var isProcessing = false;
       var isPatientRecording = false;
       var doctorKeyHeld = false;
-      var patientKeyHeld = false;
 
       var SHORTCUTS_STORAGE_KEY = "medibridge-shortcuts";
       var DEFAULT_SHORTCUTS = {
@@ -311,6 +310,24 @@
           labelEl.textContent = recording
             ? "녹음 중..."
             : btn.getAttribute("data-default-label") || labelEl.textContent;
+        }
+      }
+
+      function setPatientRecordingButton(btn, recording) {
+        btn.classList.toggle("is-recording", recording);
+        btn.setAttribute("aria-pressed", recording ? "true" : "false");
+        var labelEl = btn.querySelector(".speak-btn__label");
+        if (!labelEl) return;
+        if (recording) {
+          labelEl.textContent =
+            btn.getAttribute("data-recording-label") || "녹음 중지하기 (딸깍)";
+        } else {
+          var def = btn.getAttribute("data-default-label") || "환자 말하기";
+          labelEl.innerHTML =
+            def +
+            ' <span id="patient-shortcut-label" class="speak-btn__shortcut-label">(' +
+            shortcuts.patient.label +
+            " · 딸깍)</span>";
         }
       }
 
@@ -477,12 +494,11 @@
         if (recorder.state !== "inactive") recorder.stop();
       }
 
-      function beginPatientRemote(btn) {
-        if (isProcessing || isRecording || isPatientRecording) return;
+      function startPatientRemoteRecording(btn) {
         isPatientRecording = true;
         activeSpeaker = "patient";
         activeButton = btn;
-        setRecordingButton(btn, true);
+        setPatientRecordingButton(btn, true);
         showPatientRemoteOverlay();
         setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
         connectWebSocket()
@@ -494,16 +510,17 @@
             activeSpeaker = null;
             activeButton = null;
             hidePatientRemoteOverlay();
-            setRecordingButton(btn, false);
+            setPatientRecordingButton(btn, false);
             alert("서버에 연결할 수 없습니다.");
           });
       }
 
-      function endPatientRemote() {
+      function stopPatientRemoteRecording(btn) {
         if (!isPatientRecording) return;
         isPatientRecording = false;
         hidePatientRemoteOverlay();
-        if (activeButton) setRecordingButton(activeButton, false);
+        setPatientRecordingButton(btn, false);
+        setDetectedBadge("detecting", "전송 대기…");
         try {
           sendWs({ action: "stop_patient_record" });
         } catch (err) {
@@ -511,6 +528,15 @@
         }
         activeSpeaker = null;
         activeButton = null;
+      }
+
+      function togglePatientRemoteRecording(btn) {
+        if (isProcessing || isRecording) return;
+        if (!isPatientRecording) {
+          startPatientRemoteRecording(btn);
+        } else {
+          stopPatientRemoteRecording(btn);
+        }
       }
 
       function handleServerMessage(msg) {
@@ -540,6 +566,7 @@
         if (msg.status === "translating") {
           isPatientRecording = false;
           hidePatientRemoteOverlay();
+          if (btnPatient) setPatientRecordingButton(btnPatient, false);
           isProcessing = true;
           showProcessingOverlay();
           setDetectedBadge("detecting", "처리 중…");
@@ -554,15 +581,15 @@
           hidePatientRemoteOverlay();
           hideProcessingOverlay();
           clearAllTexts();
-          if (btnPatient) setRecordingButton(btnPatient, false);
+          if (btnPatient) setPatientRecordingButton(btnPatient, false);
           return;
         }
 
         if (msg.type === "processing") {
+          if (msg.speaker === "patient") return;
           isProcessing = true;
           hidePatientRemoteOverlay();
           showProcessingOverlay();
-          if (msg.speaker === "patient") setDetectedBadge("detecting", "처리 중…");
           return;
         }
 
@@ -572,6 +599,7 @@
           activeSpeaker = null;
           activeButton = null;
           hidePatientRemoteOverlay();
+          if (btnPatient) setPatientRecordingButton(btnPatient, false);
           hideProcessingOverlay();
           alert(msg.message || "처리 중 오류가 발생했습니다.");
           return;
@@ -581,6 +609,7 @@
           isProcessing = false;
           isPatientRecording = false;
           hidePatientRemoteOverlay();
+          if (btnPatient) setPatientRecordingButton(btnPatient, false);
           hideProcessingOverlay();
           setText(doctorText, msg.doctor_text || "");
           setText(patientText, msg.patient_text || "");
@@ -623,14 +652,13 @@
         beginDoctorSpeak(btnDoctor);
       });
 
-      btnPatient.addEventListener("mousedown", function (e) {
+      btnPatient.addEventListener("click", function (e) {
         e.preventDefault();
-        beginPatientRemote(btnPatient);
+        togglePatientRemoteRecording(btnPatient);
       });
 
       window.addEventListener("mouseup", function () {
         endDoctorSpeak();
-        endPatientRemote();
       });
 
       btnReset.addEventListener("click", function () {
@@ -705,7 +733,9 @@
 
       function updateShortcutLabels() {
         if (doctorShortcutLabel) doctorShortcutLabel.textContent = "(" + shortcuts.doctor.label + ")";
-        if (patientShortcutLabel) patientShortcutLabel.textContent = "(" + shortcuts.patient.label + ")";
+        if (patientShortcutLabel && !isPatientRecording) {
+          patientShortcutLabel.textContent = "(" + shortcuts.patient.label + " · 딸깍)";
+        }
       }
 
       function syncModalInputsFromPending() {
@@ -810,13 +840,9 @@
           }
         }
 
-        if (keyMatches(e, shortcuts.patient)) {
-          if (e.repeat || isPatientRecording) return;
+        if (keyMatches(e, shortcuts.patient) && !e.repeat) {
           e.preventDefault();
-          if (!patientKeyHeld) {
-            patientKeyHeld = true;
-            beginPatientRemote(btnPatient);
-          }
+          togglePatientRemoteRecording(btnPatient);
         }
       });
 
@@ -828,17 +854,11 @@
           doctorKeyHeld = false;
           endDoctorSpeak();
         }
-        if (keyMatches(e, shortcuts.patient)) {
-          patientKeyHeld = false;
-          endPatientRemote();
-        }
       });
 
       window.addEventListener("blur", function () {
         doctorKeyHeld = false;
-        patientKeyHeld = false;
         endDoctorSpeak();
-        endPatientRemote();
       });
     })();
   </script>

@@ -586,10 +586,11 @@ async def websocket_audio(websocket: WebSocket):
             if action == "stop_patient_record":
                 if manager.get_role(websocket) != "doctor":
                     continue
+                logger.info("stop_patient_record → display stop + broadcast translating")
                 await manager.send_to_displays(
                     {"type": "remote_patient_record", "phase": "stop"}
                 )
-                await manager.broadcast({"status": "translating"})
+                await manager.broadcast({"status": "translating", "speaker": "patient"})
                 continue
 
             if msg_type == "patient_audio":
