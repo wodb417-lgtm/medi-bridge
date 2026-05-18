@@ -150,6 +150,44 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+PATIENT_UI_STATUSES = frozenset(
+    {"recording", "processing", "ready", "patient_speaking"}
+)
+
+# 의사 → 서버 state_change → 환자 디스플레이 status
+STATE_CHANGE_TO_DISPLAY: dict[str, tuple[str, str]] = {
+    "patient_speaking": ("patient_speaking", "patient"),
+    "doctor_speaking": ("recording", "doctor"),
+    "recording": ("recording", "doctor"),
+    "processing": ("processing", "doctor"),
+    "ready": ("ready", "doctor"),
+}
+
+
+async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> None:
+    """환자 디스플레이에만 UI 상태 패킷 전송."""
+    if status not in PATIENT_UI_STATUSES:
+        return
+    payload = {"type": "status", "status": status, "speaker": speaker}
+    logger.info("broadcast_patient_status → displays: %s", payload)
+    await manager.send_to_displays(payload)
+
+
+async def relay_doctor_state_change(msg: dict) -> None:
+    """의사 state_change를 환자 디스플레이 status 패킷으로 변환·전송."""
+    state = (msg.get("state") or "").strip()
+    speaker_override = (msg.get("speaker") or "").strip()
+    mapped = STATE_CHANGE_TO_DISPLAY.get(state)
+    if not mapped:
+        logger.warning("Unknown state_change state=%r", state)
+        return
+    status, default_speaker = mapped
+    speaker = speaker_override if speaker_override in ("doctor", "patient") else default_speaker
+    if state == "processing" and speaker_override == "patient":
+        speaker = "patient"
+    await broadcast_patient_status(status, speaker=speaker)
+
+
 # 진료 세션에 고정된 환자 타겟 언어 (환자 발화 시 Whisper 감지로 Lock-in)
 current_session_lang: str | None = None
 
@@ -763,7 +801,7 @@ async def api_transcribe(
     target = (target_lang or "").strip()
     target_override = manual if manual else (target if target else None)
 
-    await manager.broadcast({"type": "processing", "speaker": "doctor"})
+    await broadcast_patient_status("processing", speaker="doctor")
     try:
         result = await process_audio_session(
             audio_bytes=audio_bytes,
@@ -772,12 +810,14 @@ async def api_transcribe(
             upload_filename=audio.filename,
         )
         await manager.broadcast(result)
+        await broadcast_patient_status("ready", speaker="doctor")
         return result
     except Exception as exc:
         logger.exception("api/transcribe failed")
         await manager.broadcast(
             {"type": "error", "message": str(exc), "speaker": "doctor"}
         )
+        await broadcast_patient_status("ready", speaker="doctor")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -852,7 +892,7 @@ async def websocket_audio(websocket: WebSocket):
                 await manager.send_to_displays(
                     {"type": "remote_patient_record", "phase": "stop"}
                 )
-                await manager.broadcast({"status": "translating", "speaker": "patient"})
+                await broadcast_patient_status("processing", speaker="patient")
                 continue
 
             if msg_type == "patient_audio":
@@ -870,11 +910,13 @@ async def websocket_audio(websocket: WebSocket):
                             logger.warning("Patient audio chunk skipped: %s", exc)
                 elif phase == "end":
                     try:
+                        await broadcast_patient_status("processing", speaker="patient")
                         result = await process_audio_session(
                             audio_bytes=b"".join(patient_remote_chunks),
                             speaker="patient",
                         )
                         await manager.broadcast(result)
+                        await broadcast_patient_status("ready", speaker="patient")
                     except Exception as exc:
                         await manager.broadcast(
                             {
@@ -883,6 +925,7 @@ async def websocket_audio(websocket: WebSocket):
                                 "speaker": "patient",
                             }
                         )
+                        await broadcast_patient_status("ready", speaker="patient")
                     patient_remote_chunks.clear()
                 continue
 
@@ -892,6 +935,32 @@ async def websocket_audio(websocket: WebSocket):
                     {"type": "registered", "role": manager.get_role(websocket)}
                 )
                 await websocket.send_json(session_state_payload())
+                continue
+
+            if msg_type == "state_change":
+                if manager.get_role(websocket) != "doctor":
+                    continue
+                await relay_doctor_state_change(msg)
+                state_val = (msg.get("state") or "").strip()
+                if state_val == "patient_speaking":
+                    patient_remote_chunks.clear()
+                    await manager.send_to_displays(
+                        {"type": "remote_patient_record", "phase": "start"}
+                    )
+                elif state_val == "processing" and msg.get("speaker") == "patient":
+                    await manager.send_to_displays(
+                        {"type": "remote_patient_record", "phase": "stop"}
+                    )
+                continue
+
+            if msg_type == "status":
+                if manager.get_role(websocket) != "doctor":
+                    continue
+                status = msg.get("status")
+                if status in PATIENT_UI_STATUSES:
+                    await broadcast_patient_status(
+                        status, speaker=msg.get("speaker", "doctor")
+                    )
                 continue
 
             if msg_type == "set_language":
@@ -919,6 +988,7 @@ async def websocket_audio(websocket: WebSocket):
                             "stop_audio": True,
                         }
                     )
+                    await broadcast_patient_status("ready", speaker="doctor")
                 continue
 
             if msg_type == "ping":

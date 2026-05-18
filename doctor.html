@@ -99,11 +99,11 @@
           </svg>
           <span class="speak-btn__label">의사 말하기 <span id="doctor-shortcut-label" class="speak-btn__shortcut-label">(Spacebar)</span></span>
         </button>
-        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" data-recording-label="녹음 중지하기 (딸깍)" aria-pressed="false">
+        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" data-recording-label="말하기 종료" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
           </svg>
-          <span class="speak-btn__label">환자 말하기 <span class="speak-btn__hint">(클릭으로 시작·종료)</span></span>
+          <span class="speak-btn__label">환자 말하기</span>
         </button>
       </div>
     </footer>
@@ -329,11 +329,10 @@
         if (!labelEl) return;
         if (recording) {
           labelEl.textContent =
-            btn.getAttribute("data-recording-label") || "녹음 중지하기 (딸깍)";
+            btn.getAttribute("data-recording-label") || "말하기 종료";
         } else {
-          var def = btn.getAttribute("data-default-label") || "환자 말하기";
-          labelEl.innerHTML =
-            def + ' <span class="speak-btn__hint">(클릭으로 시작·종료)</span>';
+          labelEl.textContent =
+            btn.getAttribute("data-default-label") || "환자 말하기";
         }
       }
 
@@ -483,6 +482,15 @@
         sendDoctorMeta(payload);
       }
 
+      /** 환자 디스플레이 상태 동기화 (서버 → state_change 릴레이) */
+      function sendDoctorStateChange(state, speaker) {
+        var payload = { type: "state_change", state: state };
+        if (speaker) payload.speaker = speaker;
+        return connectWebSocket().then(function () {
+          sendDoctorMeta(payload);
+        });
+      }
+
       function getPatientTargetLangCode() {
         var selected = languageSelect.value;
         if (selected) return selected;
@@ -513,6 +521,7 @@
         isRecording = true;
         setRecordingButton(btn, true);
         hideProcessingOverlay();
+        sendDoctorStateChange("doctor_speaking", "doctor").catch(function () { /* ignore */ });
       }
 
       function stopDoctorRecording() {
@@ -534,7 +543,11 @@
           var chunks = doctorRecordedChunks.slice();
           doctorRecordedChunks = [];
           var blob = new Blob(chunks, { type: doctorRecordingMime });
-          submitDoctorAudioViaForm(blob)
+          sendDoctorStateChange("processing", "doctor")
+            .catch(function () { /* ignore */ })
+            .finally(function () {
+              return submitDoctorAudioViaForm(blob);
+            })
             .then(function () {
               /* 결과·TTS는 WebSocket broadcast로 수신 */
             })
@@ -557,10 +570,7 @@
         setPatientRecordingButton(btn, true);
         showPatientRemoteOverlay();
         setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
-        connectWebSocket()
-          .then(function () {
-            sendDoctorMeta({ action: "start_patient_record" });
-          })
+        sendDoctorStateChange("patient_speaking", "patient")
           .catch(function () {
             isPatientRecording = false;
             activeSpeaker = null;
@@ -577,11 +587,9 @@
         hidePatientRemoteOverlay();
         setPatientRecordingButton(btn, false);
         setDetectedBadge("detecting", "전송 대기…");
-        try {
-          sendWs({ action: "stop_patient_record" });
-        } catch (err) {
+        sendDoctorStateChange("processing", "patient").catch(function (err) {
           alert(err.message || "전송에 실패했습니다.");
-        }
+        });
         activeSpeaker = null;
         activeButton = null;
       }

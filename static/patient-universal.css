@@ -28,14 +28,31 @@ body.patient-display .brand h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2rem;
+  gap: 1.5rem;
   padding: 2.5rem 2rem;
   background: var(--mb-white);
   z-index: 2;
   pointer-events: none;
 }
 
-.patient-universal-stage[data-ui-state="subtitle"] {
+/* 아이콘 영역 고정 — 상태 전환 시 레이아웃 흔들림 방지 */
+.patient-status-hub {
+  position: relative;
+  width: clamp(5.5rem, 20vw, 9.5rem);
+  height: clamp(5.5rem, 20vw, 9.5rem);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.patient-status-hub .ui-state {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+}
+
+.patient-universal-stage[data-ui-state="subtitle"],
+.patient-universal-stage[data-ui-state="unlock"] {
   display: none;
 }
 
@@ -53,8 +70,17 @@ body.patient-display .brand h1 {
 
 .patient-universal-stage[data-ui-state="ready"] .ui-state--ready,
 .patient-universal-stage[data-ui-state="recording"] .ui-state--recording,
+.patient-universal-stage[data-ui-state="patient_speaking"] .ui-state--recording,
 .patient-universal-stage[data-ui-state="processing"] .ui-state--processing {
   display: flex;
+}
+
+.patient-universal-stage[data-ui-state="patient_speaking"] {
+  z-index: 5;
+}
+
+.patient-universal-stage[data-ui-state="patient_speaking"] .ui-icon--recording i.fas {
+  color: var(--mb-accent);
 }
 
 .ui-icon {
@@ -64,18 +90,19 @@ body.patient-display .brand h1 {
   justify-content: center;
 }
 
-.ui-icon svg {
-  width: clamp(5rem, 18vw, 9rem);
-  height: clamp(5rem, 18vw, 9rem);
+.ui-icon i.fas {
+  font-size: clamp(4.25rem, 14vw, 7rem);
+  line-height: 1;
+  display: block;
 }
 
-/* Ready — 청진기(대기) */
-.ui-icon--ready svg {
-  stroke: var(--mb-navy);
-  fill: none;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.ui-icon--ready i.fas {
+  color: var(--mb-navy);
+}
+
+.ui-icon--recording i.fas,
+.ui-icon--processing i.fas {
+  color: var(--mb-accent);
 }
 
 /* Recording — 마이크 펄스 */
@@ -93,8 +120,7 @@ body.patient-display .brand h1 {
   animation: ui-mic-ring 1.6s ease-out infinite;
 }
 
-.ui-icon--recording svg {
-  fill: var(--mb-accent);
+.ui-icon--recording i.fas {
   position: relative;
   z-index: 1;
 }
@@ -110,7 +136,7 @@ body.patient-display .brand h1 {
   }
 }
 
-.ui-icon--pulse svg {
+.ui-icon--pulse i.fas {
   animation: ui-mic-pulse 1.2s ease-in-out infinite;
 }
 
@@ -125,22 +151,6 @@ body.patient-display .brand h1 {
   }
 }
 
-/* Processing — 메디컬 스피너 */
-.ui-icon--processing .medical-spinner {
-  width: clamp(4.5rem, 16vw, 7rem);
-  height: clamp(4.5rem, 16vw, 7rem);
-  border: 5px solid var(--mb-border);
-  border-top-color: var(--mb-accent);
-  border-radius: 50%;
-  animation: ui-spin 0.9s linear infinite;
-}
-
-@keyframes ui-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .ui-hint {
   font-size: clamp(1.125rem, 3vw, 1.5rem);
   font-weight: 700;
@@ -148,7 +158,10 @@ body.patient-display .brand h1 {
   text-transform: uppercase;
   color: var(--mb-accent);
   margin: 0;
-  min-height: 1.5em;
+  min-height: 2.5em;
+  max-width: 28rem;
+  text-align: center;
+  line-height: 1.35;
 }
 
 .patient-universal-stage[data-ui-state="ready"] .ui-hint {

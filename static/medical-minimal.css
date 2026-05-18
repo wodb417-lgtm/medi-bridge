@@ -339,6 +339,12 @@ body.doctor-master .header__actions {
   box-shadow: none;
 }
 
+.speak-btn--patient .speak-btn__label {
+  white-space: nowrap;
+  text-align: center;
+  min-width: 5.5rem;
+}
+
 .speak-btn--patient:hover {
   background: var(--mb-surface);
   border-color: var(--mb-accent);

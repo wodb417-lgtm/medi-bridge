@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
   <link rel="stylesheet" href="/static/patient-universal.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="/static/medibridge-ws.js"></script>
 </head>
 <body class="patient-display medibridge-ui">
@@ -41,23 +42,21 @@
           </div>
 
           <div id="patient-universal-stage" class="patient-universal-stage" data-ui-state="ready" aria-live="polite">
-            <div class="ui-state ui-state--ready">
-              <div class="ui-icon ui-icon--ready" aria-hidden="true">
-                <svg viewBox="0 0 64 64" aria-hidden="true">
-                  <path d="M18 10a6 6 0 0112 0v16a6 6 0 01-11.2 2.9M24 28v8a10 10 0 0010 10h2a8 8 0 008-8v-6"/>
-                </svg>
+            <div class="patient-status-hub" aria-hidden="false">
+              <div class="ui-state ui-state--ready">
+                <div class="ui-icon ui-icon--ready">
+                  <i class="fas fa-stethoscope" aria-hidden="true"></i>
+                </div>
               </div>
-            </div>
-            <div class="ui-state ui-state--recording">
-              <div class="ui-icon ui-icon--recording ui-icon--pulse" aria-hidden="true">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
-                </svg>
+              <div class="ui-state ui-state--recording">
+                <div class="ui-icon ui-icon--recording ui-icon--pulse">
+                  <i class="fas fa-microphone" aria-hidden="true"></i>
+                </div>
               </div>
-            </div>
-            <div class="ui-state ui-state--processing">
-              <div class="ui-icon ui-icon--processing" aria-hidden="true">
-                <div class="medical-spinner"></div>
+              <div class="ui-state ui-state--processing">
+                <div class="ui-icon ui-icon--processing">
+                  <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
+                </div>
               </div>
             </div>
             <p id="ui-hint-text" class="ui-hint">READY · 대기</p>
@@ -159,16 +158,96 @@
 
       var PATIENT_UI_HINTS = {
         ready: "READY · 대기",
-        recording: "SPEAK · 말씀하세요",
-        processing: "TRANSLATING · 번역중",
+        recording: "DOCTOR · 의사가 말씀하시는 중",
+        patient_speaking: "지금 말씀하세요 (Listening...)",
+        processing: "번역 및 음성 생성 중",
+        processing_patient: "의사 선생님에게 번역 중입니다...",
+        subtitle: "",
       };
 
-      function setPatientUiState(state) {
+      function setPatientUiState(state, hintOverride) {
         if (!patientUniversalStage) return;
         var key = state || "ready";
         patientUniversalStage.setAttribute("data-ui-state", key);
         if (uiHintText) {
-          uiHintText.textContent = PATIENT_UI_HINTS[key] || "";
+          uiHintText.textContent =
+            hintOverride != null ? hintOverride : PATIENT_UI_HINTS[key] || "";
+        }
+      }
+
+      function applyPatientStatusMessage(msg) {
+        if (!msg) return;
+        var status = msg.status;
+        var speaker = msg.speaker || "doctor";
+
+        if (
+          status !== "patient_speaking" &&
+          status !== "recording" &&
+          status !== "processing" &&
+          status !== "ready"
+        ) {
+          return;
+        }
+
+        if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
+          setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+          return;
+        }
+
+        if (status === "recording" && speaker === "doctor") {
+          setPatientUiState("recording", PATIENT_UI_HINTS.recording);
+          return;
+        }
+
+        if (status === "processing") {
+          var processingHint =
+            speaker === "patient"
+              ? PATIENT_UI_HINTS.processing_patient
+              : PATIENT_UI_HINTS.processing;
+          setPatientUiState("processing", processingHint);
+          if (languageLocked) setDetectedBadge("detecting", "처리 중…");
+          return;
+        }
+
+        if (status === "ready") {
+          if (translationView.classList.contains("is-visible")) {
+            setPatientUiState("subtitle");
+          } else if (clinicAudioInitializedByUser) {
+            setPatientUiState("ready");
+          } else {
+            setPatientUiState("unlock");
+          }
+        }
+      }
+
+      function applyStateChangeMessage(msg) {
+        if (!msg || msg.type !== "state_change") return;
+        var state = msg.state;
+        var speaker = msg.speaker || "doctor";
+        if (state === "patient_speaking") {
+          applyPatientStatusMessage({
+            type: "status",
+            status: "patient_speaking",
+            speaker: "patient",
+          });
+        } else if (state === "doctor_speaking" || state === "recording") {
+          applyPatientStatusMessage({
+            type: "status",
+            status: "recording",
+            speaker: "doctor",
+          });
+        } else if (state === "processing") {
+          applyPatientStatusMessage({
+            type: "status",
+            status: "processing",
+            speaker: speaker,
+          });
+        } else if (state === "ready") {
+          applyPatientStatusMessage({
+            type: "status",
+            status: "ready",
+            speaker: speaker,
+          });
         }
       }
       var subtitleBody = document.getElementById("subtitle-body");
@@ -184,6 +263,8 @@
 
       var languageLocked = false;
       var audioUnlocked = false;
+      /** 이번 페이지 방문에서 사용자가 연결 버튼을 눌러 오디오를 초기화했는지 */
+      var clinicAudioInitializedByUser = false;
       var ws = null;
       var wsConnectPromise = null;
 
@@ -297,7 +378,7 @@
             btnAudioUnlock.classList.add("is-connected");
           }
           hideAudioUnlockOverlay();
-          showWelcomeScreen({ skipUnlockCheck: true });
+          showWelcomeScreen();
         } else {
           setConnectionStatus("error", "연결 실패 — 버튼을 다시 눌러 주세요");
           if (btnAudioUnlock) {
@@ -576,15 +657,11 @@
       }
 
       function hasCompletedUnlockFlow() {
-        return audioUnlocked || localStorage.getItem(AUDIO_UNLOCK_KEY) === "true";
+        return clinicAudioInitializedByUser;
       }
 
       function isAudioUnlocked() {
-        return hasCompletedUnlockFlow() && isAudioPlaybackReady();
-      }
-
-      function needsAudioUnlockOverlay() {
-        return !hasCompletedUnlockFlow() || !isAudioPlaybackReady();
+        return clinicAudioInitializedByUser && isAudioPlaybackReady();
       }
 
       function hideAudioUnlockOverlay() {
@@ -602,6 +679,7 @@
         welcomeScreen.classList.add("is-hidden");
         welcomeScreen.setAttribute("aria-hidden", "true");
         translationView.classList.remove("is-visible");
+        setPatientUiState("unlock");
       }
 
       function primeSilentBufferPlayback(ctx) {
@@ -664,6 +742,7 @@
         micStream = stream;
         micReady = true;
         audioUnlocked = true;
+        clinicAudioInitializedByUser = true;
         try {
           localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
         } catch (e) { /* ignore */ }
@@ -671,9 +750,8 @@
         updateClinicConnectionUI(true);
       }
 
-      function showWelcomeScreen(options) {
-        var skipUnlockCheck = options && options.skipUnlockCheck;
-        if (!skipUnlockCheck && !isAudioUnlocked()) {
+      function showWelcomeScreen() {
+        if (!clinicAudioInitializedByUser) {
           showAudioUnlockOverlay();
           return;
         }
@@ -722,7 +800,7 @@
 
       function showRecordingPrompt() {
         hideProcessingOverlay();
-        setPatientUiState("recording");
+        setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
         recordingPrompt.classList.add("is-visible");
         recordingPrompt.setAttribute("aria-hidden", "false");
       }
@@ -740,11 +818,12 @@
       }
 
       function applySessionState(msg) {
+        if (!clinicAudioInitializedByUser) return;
         languageLocked = !!msg.language_locked;
         if (msg.language_locked && msg.session_lang) {
           showTranslationScreen(msg.detected_language_label_ko || msg.session_lang);
         } else {
-          showWelcomeScreen({ skipUnlockCheck: true });
+          showWelcomeScreen();
         }
       }
 
@@ -770,12 +849,22 @@
 
         if (msg.type === "registered" || msg.type === "pong") return;
 
+        if (msg.type === "status") {
+          applyPatientStatusMessage(msg);
+          return;
+        }
+
+        if (msg.type === "state_change") {
+          applyStateChangeMessage(msg);
+          return;
+        }
+
         if (msg.status === "translating") {
-          hideRecordingPrompt();
-          showProcessingOverlay();
-          if (languageLocked) {
-            setDetectedBadge("detecting", "처리 중…");
-          }
+          applyPatientStatusMessage({
+            type: "status",
+            status: "processing",
+            speaker: msg.speaker || "patient",
+          });
           return;
         }
 
@@ -810,21 +899,20 @@
             }
             micRecorder = null;
           }
-          if (msg.type === "reset") {
+          if (msg.type === "reset" && clinicAudioInitializedByUser) {
             hideProcessingOverlay();
             hideRecordingPrompt();
-            showWelcomeScreen({ skipUnlockCheck: true });
+            showWelcomeScreen();
           }
           return;
         }
 
         if (msg.type === "processing") {
-          if (msg.speaker === "patient") return;
-          hideRecordingPrompt();
-          showProcessingOverlay();
-          if (languageLocked) {
-            setDetectedBadge("detecting", "처리 중…");
-          }
+          applyPatientStatusMessage({
+            type: "status",
+            status: "processing",
+            speaker: msg.speaker || "doctor",
+          });
           return;
         }
 
@@ -838,6 +926,7 @@
         }
 
         if (msg.type === "result") {
+          if (!clinicAudioInitializedByUser) return;
           hideProcessingOverlay();
           hideRecordingPrompt();
           showTranslationScreen(msg.detected_language_label_ko || null);
@@ -846,6 +935,9 @@
           updateSubtitle(displayText, msg.speaker);
           if (msg.detected_language_label_ko) {
             setDetectedBadge("detected", msg.detected_language_label_ko);
+          }
+          if (msg.speaker === "doctor") {
+            setPatientUiState("subtitle");
           }
         }
       }
@@ -911,10 +1003,10 @@
             ws = socket;
             wsConnectPromise = null;
             socket.send(JSON.stringify({ type: "register", role: "display" }));
-            if (isAudioUnlocked()) {
+            if (clinicAudioInitializedByUser) {
               setConnectionStatus("ok", "🟢 진료실 연결 완료");
             } else {
-              setConnectionStatus("ok", "서버 연결됨");
+              setConnectionStatus("warn", "서버 연결됨 · 스피커·마이크 연결 필요");
             }
             resolve(socket);
           };
@@ -985,16 +1077,9 @@
 
       bindPageEventsOnce();
 
-      if (needsAudioUnlockOverlay()) {
-        showAudioUnlockOverlay();
-        setConnectionStatus("warn", "스피커·마이크 연결 필요");
-      } else {
-        audioUnlocked = true;
-        micReady = false;
-        hideAudioUnlockOverlay();
-        showWelcomeScreen({ skipUnlockCheck: true });
-        setConnectionStatus("warn", "🟢 연결됨 · 스피커 재활성화 필요");
-      }
+      clinicAudioInitializedByUser = false;
+      showAudioUnlockOverlay();
+      setConnectionStatus("warn", "스피커·마이크 연결 필요");
       connectWebSocket().catch(function () {});
     })();
   </script>
