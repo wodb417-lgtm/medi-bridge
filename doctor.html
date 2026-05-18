@@ -19,6 +19,14 @@
         </div>
       </div>
       <div class="header__actions">
+        <div class="dept-select-wrap">
+          <label for="department-select" class="dept-select__label">진료과</label>
+          <select id="department-select" class="department-select" aria-label="진료과 선택">
+            <option value="internal" selected>내과</option>
+            <option value="ortho">정형외과</option>
+            <option value="ent">이비인후과</option>
+          </select>
+        </div>
         <button type="button" id="btn-settings" class="settings-btn" aria-label="단축키 설정" title="단축키 설정">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
@@ -142,6 +150,8 @@
       var patientTitle = document.getElementById("patient-title");
       var patientSubtitle = document.getElementById("patient-subtitle");
       var languageSelect = document.getElementById("language-select");
+      var departmentSelect = document.getElementById("department-select");
+      var DEPARTMENT_STORAGE_KEY = "medibridge-department";
       var detectedLangBadge = document.getElementById("detected-lang-badge");
       var detectedLangValue = document.getElementById("detected-lang-value");
       var connectionStatus = document.getElementById("connection-status");
@@ -255,6 +265,7 @@
       }
 
       applyUnlockedUI();
+      loadDepartmentFromStorage();
 
       function acceptActionDebounce(action) {
         var now = Date.now();
@@ -374,6 +385,14 @@
             ws = socket;
             wsConnectPromise = null;
             socket.send(JSON.stringify({ type: "register", role: "doctor" }));
+            try {
+              socket.send(
+                JSON.stringify({
+                  type: "set_department",
+                  department: getDepartmentCode(),
+                })
+              );
+            } catch (err) { /* ignore */ }
             setConnectionStatus("ok", "서버 연결됨");
             resolve(socket);
           };
@@ -432,6 +451,43 @@
         return "en";
       }
 
+      function getDepartmentCode() {
+        if (!departmentSelect) return "internal";
+        var code = departmentSelect.value;
+        return code === "ortho" || code === "ent" ? code : "internal";
+      }
+
+      function loadDepartmentFromStorage() {
+        try {
+          var saved = localStorage.getItem(DEPARTMENT_STORAGE_KEY);
+          if (saved && departmentSelect) {
+            if (saved === "ortho" || saved === "ent" || saved === "internal") {
+              departmentSelect.value = saved;
+            }
+          }
+        } catch (err) { /* ignore */ }
+      }
+
+      function persistDepartment(code) {
+        try {
+          localStorage.setItem(DEPARTMENT_STORAGE_KEY, code);
+        } catch (err) { /* ignore */ }
+      }
+
+      function syncDepartmentToServer() {
+        connectWebSocket()
+          .then(function () {
+            sendWs({ type: "set_department", department: getDepartmentCode() });
+          })
+          .catch(function () { /* 연결 전이면 start 시 함께 전송 */ });
+      }
+
+      function onDepartmentSelectChange() {
+        var code = getDepartmentCode();
+        persistDepartment(code);
+        syncDepartmentToServer();
+      }
+
       function buildSessionMeta(speaker) {
         var targetLang = getPatientTargetLangCode();
         return {
@@ -439,6 +495,7 @@
           speaker: speaker,
           target_lang: targetLang,
           manual_lang: languageSelect.value || null,
+          department: getDepartmentCode(),
         };
       }
 
@@ -508,7 +565,10 @@
         setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
         connectWebSocket()
           .then(function () {
-            sendWs({ action: "start_patient_record" });
+            sendWs({
+              action: "start_patient_record",
+              department: getDepartmentCode(),
+            });
           })
           .catch(function () {
             isPatientRecording = false;
@@ -822,6 +882,9 @@
         pageEventsBound = true;
 
         languageSelect.onchange = onLanguageSelectChange;
+        if (departmentSelect) {
+          departmentSelect.onchange = onDepartmentSelectChange;
+        }
 
         btnDoctor.onmousedown = function (e) {
           e.preventDefault();
