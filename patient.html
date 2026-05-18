@@ -532,6 +532,37 @@
         translationView.classList.remove("is-visible");
       }
 
+      function primeSilentBufferPlayback(ctx) {
+        var sampleRate = ctx.sampleRate || 44100;
+        var buffer = ctx.createBuffer(1, Math.max(128, Math.floor(sampleRate * 0.05)), sampleRate);
+        var channel = buffer.getChannelData(0);
+        for (var i = 0; i < channel.length; i++) {
+          channel[i] = 0;
+        }
+        var src = ctx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(ctx.destination);
+        src.start(0);
+        return src;
+      }
+
+      function primeHtmlAudioElement() {
+        if (!htmlAudioFallback) {
+          htmlAudioFallback = new Audio();
+          htmlAudioFallback.setAttribute("playsinline", "true");
+          htmlAudioFallback.setAttribute("webkit-playsinline", "true");
+        }
+        htmlAudioFallback.volume = 0.01;
+        htmlAudioFallback.src = SILENT_AUDIO_WAV;
+        var p = htmlAudioFallback.play();
+        if (p && typeof p.then === "function") {
+          return p.catch(function () {
+            return Promise.resolve();
+          });
+        }
+        return Promise.resolve();
+      }
+
       function unlockPatientAudio() {
         var Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) {
@@ -541,20 +572,15 @@
         return audioCtx
           .resume()
           .then(function () {
-            return fetch(SILENT_AUDIO_WAV).then(function (res) {
-              return res.arrayBuffer();
-            });
-          })
-          .then(function (buf) {
             if (!audioCtx) throw new Error("AudioContext lost");
-            return audioCtx.decodeAudioData(buf);
+            try {
+              primeSilentBufferPlayback(audioCtx);
+            } catch (primeErr) {
+              console.warn("Web Audio silent prime skipped", primeErr);
+            }
+            return primeHtmlAudioElement();
           })
-          .then(function (silentBuffer) {
-            if (!audioCtx) throw new Error("AudioContext lost");
-            var src = audioCtx.createBufferSource();
-            src.buffer = silentBuffer;
-            src.connect(audioCtx.destination);
-            src.start(0);
+          .then(function () {
             audioUnlocked = true;
             try {
               localStorage.setItem(AUDIO_UNLOCK_KEY, "true");

@@ -280,6 +280,30 @@ def session_state_payload() -> dict:
     }
 
 
+WHISPER_UPLOAD_MIME: dict[str, str] = {
+    ".webm": "audio/webm",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".mpeg": "audio/mpeg",
+    ".mpga": "audio/mpeg",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".flac": "audio/flac",
+}
+
+
+def whisper_upload_file(file_path: str) -> tuple[str, object, str]:
+    """OpenAI Whisper file= 튜플 (파일명, 바이너리 스트림, MIME) — Invalid file format 방지."""
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext not in WHISPER_UPLOAD_MIME:
+        ext = ".webm"
+    upload_name = f"recording{ext}"
+    upload_mime = WHISPER_UPLOAD_MIME[ext]
+    audio_file = open(file_path, "rb")
+    return upload_name, audio_file, upload_mime
+
+
 def transcribe_audio(
     file_path: str,
     language_hint: str | None = None,
@@ -301,8 +325,20 @@ def transcribe_audio(
             auto_detect_only,
         )
 
-    with open(file_path, "rb") as audio_file:
-        transcript = client.audio.transcriptions.create(file=audio_file, **kwargs)
+    upload_name, audio_file, upload_mime = whisper_upload_file(file_path)
+    try:
+        logger.info(
+            "Whisper upload file=%s mime=%s size=%s bytes",
+            upload_name,
+            upload_mime,
+            os.path.getsize(file_path),
+        )
+        transcript = client.audio.transcriptions.create(
+            file=(upload_name, audio_file, upload_mime),
+            **kwargs,
+        )
+    finally:
+        audio_file.close()
 
     text = (transcript.text or "").strip()
     raw_detected = getattr(transcript, "language", None)
@@ -436,8 +472,11 @@ async def process_audio_session(
 
     tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".webm", delete=False) as tmp:
+        with tempfile.NamedTemporaryFile(
+            suffix=".webm", prefix="medibridge_", delete=False
+        ) as tmp:
             tmp.write(audio_bytes)
+            tmp.flush()
             tmp_path = tmp.name
 
         if speaker == "doctor":
