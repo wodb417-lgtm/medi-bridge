@@ -73,21 +73,6 @@ body {
   gap: 0.5rem;
 }
 
-/* 진료과: 작고 정갈하게 구석 */
-.dept-select-wrap {
-  order: -1;
-  padding: 0.2rem 0.5rem;
-  background: var(--mb-white);
-  border: 1px solid var(--mb-border);
-  border-radius: 4px;
-  box-shadow: none;
-  gap: 0.35rem;
-}
-
-.dept-select-wrap--corner {
-  margin-right: 0.5rem;
-}
-
 body.doctor-master .header {
   flex-wrap: wrap;
   gap: 0.5rem 1rem;
@@ -97,22 +82,6 @@ body.doctor-master .header__actions {
   margin-left: auto;
   flex-wrap: wrap;
   justify-content: flex-end;
-}
-
-.dept-select__label {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--mb-text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.department-select {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--mb-navy);
-  min-width: 5rem;
-  padding: 0.15rem 1.25rem 0.15rem 0;
 }
 
 .settings-btn {

@@ -153,9 +153,6 @@ manager = ConnectionManager()
 # 진료 세션에 고정된 환자 타겟 언어 (환자 발화 시 Whisper 감지로 Lock-in)
 current_session_lang: str | None = None
 
-# 의사 화면에서 선택한 진료과 (Whisper·GPT soft bias)
-current_session_department: str = "internal"
-
 # 환자 태블릿에서 원격 녹음된 오디오 청크
 patient_remote_chunks: list[bytes] = []
 
@@ -167,43 +164,12 @@ TTS_VOICE_ALT = "onyx"
 # 번역·문맥 교정용 채팅 모델 (지연 시간 최적화)
 GPT_CHAT_MODEL = "gpt-4o-mini"
 
-DEPARTMENT_CODES = frozenset({"internal", "ortho", "ent"})
-DEFAULT_DEPARTMENT = "internal"
-
-# Whisper: 경남·경북(경상) 사투리 + 진료실 의학 용어 힌트 (의사 발화 STT)
-WHISPER_GYEONGSANG_DIALECT_PROMPT = (
-    "이 음성은 경상도 사투리 억양이 강한 진료실 대화입니다. "
-    "장염, 위염, 복통, 처방, 약, 맞나, 아이가, 했다이가, 증상, 내원, "
-    "할딱거림, 우리하게, 새하다, 디이소, 투약, 소화불량, 부종, 골절."
+# Whisper: 범용 의원 진료실 (의사 발화 STT)
+WHISPER_DOCTOR_PROMPT = (
+    "이 음성은 한국의 일반 의원(내과, 정형외과, 이비인후과 등) 진료실에서 의사와 외국인 환자가 나누는 대화입니다. "
+    "의사 선생님이 환자의 통증이나 다양한 질환 증상을 묻고 진찰하며, 약 처방 및 향후 주의사항을 정중하게 안내하는 상황입니다. "
+    "경상도 사투리나 흘리는 발음, 일상적인 의학 용어가 있더라도 전체 맥락을 파악하여 표준어로 자연스럽고 정확하게 받아적어 주세요."
 )
-
-# Whisper soft-bias: 과별 콘텍스트 팩 (힌트일 뿐 — 명확한 타과 발화는 억지 보정 금지)
-WHISPER_SOFT_BIAS_SUFFIX = (
-    " 이 힌트는 느슨한 가중치일 뿐입니다. "
-    "환자가 다른 과 영역(예: 교통사고, 무릎, 알레르기 비염 등)을 명확히 말하면 "
-    "억지로 이 과 용어로 끼워 맞추지 말고 들린 대로 받아적으세요."
-)
-
-WHISPER_DEPARTMENT_PROMPTS: dict[str, str] = {
-    "internal": (
-        "이 음성은 내과 진료실 대화입니다. "
-        "장염, 위염, 복통, 처방, 식후 30분, 투약, 내원, 소화불량."
-    ),
-    "ortho": (
-        "이 음성은 정형외과 진료실 대화입니다. "
-        "골절, 깁스, 인대, 염좌, 물리치료, 통증, 엑스레이."
-    ),
-    "ent": (
-        "이 음성은 이비인후과 진료실 대화입니다. "
-        "감기, 비염, 인후통, 중이염, 기침, 가래, 흡입치료."
-    ),
-}
-
-DEPARTMENT_LABEL_KO: dict[str, str] = {
-    "internal": "내과",
-    "ortho": "정형외과",
-    "ent": "이비인후과",
-}
 
 MEDICAL_INTERPRETER_SYSTEM_PROMPT = """You are an intelligent medical AI assistant in a Korean hospital outpatient clinic.
 You specialize in interpreting a doctor's spoken Korean (via speech-to-text) into the patient's language with clinical accuracy and safety.
@@ -292,47 +258,10 @@ You represent the doctor's professionalism and dignity as a courteous medical in
 - Use respectful honorific/register appropriate to professional bedside care in the target locale; keep sentences structurally clear for medication timing, precautions, and follow-up.
 - This is NOT "dumbing down" the doctor: preserve seriousness, authority, and care — only remove unnecessary jargon barriers.
 
-## Department context packs (soft bias only)
-When a department context is provided (internal / ortho / ent), treat it as a **loose prior** for vocabulary and STT repair — NOT a rigid filter.
-- Do NOT force internal-medicine terms if the utterance clearly belongs to another specialty (e.g., traffic accident, knee, cast → orthopedics; ear pain, rhinitis → ENT).
-- Do NOT invent specialty-specific details absent from the source.
-
 ## Target-language quality
 - For patient-facing output: use natural, respectful, easy-to-understand clinical phrasing native to the target locale.
 - Avoid idioms, slang, and ambiguous abbreviations.
 - Keep sentences concise for bedside communication."""
-
-
-def resolve_department(code: str | None) -> str:
-    """진료과 코드 정규화 (internal / ortho / ent)."""
-    if not code:
-        return DEFAULT_DEPARTMENT
-    lowered = str(code).lower().strip()
-    if lowered in DEPARTMENT_CODES:
-        return lowered
-    aliases = {
-        "im": "internal",
-        "medicine": "internal",
-        "orthopedics": "ortho",
-        "orthopedic": "ortho",
-        "otorhinolaryngology": "ent",
-        "otolaryngology": "ent",
-    }
-    return aliases.get(lowered, DEFAULT_DEPARTMENT)
-
-
-def build_whisper_doctor_prompt(department: str | None = None) -> str:
-    """경상 사투리 + 과별 Whisper prompt + soft-bias suffix."""
-    dept = resolve_department(department or current_session_department)
-    dept_core = WHISPER_DEPARTMENT_PROMPTS.get(
-        dept, WHISPER_DEPARTMENT_PROMPTS[DEFAULT_DEPARTMENT]
-    )
-    return (
-        WHISPER_GYEONGSANG_DIALECT_PROMPT
-        + " "
-        + dept_core
-        + WHISPER_SOFT_BIAS_SUFFIX
-    )
 
 
 def reset_session_language() -> None:
@@ -542,20 +471,15 @@ def translate_text(
     text: str,
     source_lang: str,
     target_lang: str,
-    *,
-    department: str | None = None,
 ) -> str:
     source = LANG_NAMES.get(normalize_lang_code(source_lang), source_lang)
     target = LANG_NAMES.get(normalize_lang_code(target_lang), target_lang)
     source_code = normalize_lang_code(source_lang)
     target_code = normalize_lang_code(target_lang)
-    dept = resolve_department(department)
-    dept_label_ko = DEPARTMENT_LABEL_KO.get(dept, dept)
 
     if source_code == "ko":
         user_content = (
             f"Translate the following doctor utterance (Korean STT transcript) into {target} ({target_code}).\n\n"
-            f"Department context (soft bias only — do NOT force unrelated specialty terms): {dept_label_ko} ({dept}).\n\n"
             "Apply the system prompt [Translation tone & manner] strictly: polite, clear everyday medical language; "
             "no infantile tone; preserve the doctor's professional weight.\n\n"
             "Follow the system prompt pipeline strictly:\n"
@@ -651,11 +575,9 @@ async def process_audio_session(
     speaker: str,
     *,
     target_lang: str | None = None,
-    department: str | None = None,
     upload_filename: str | None = None,
 ) -> dict:
     global current_session_lang
-    dept = resolve_department(department)
 
     if not audio_bytes:
         raise ValueError("수신된 오디오 데이터가 없습니다.")
@@ -682,14 +604,13 @@ async def process_audio_session(
             tmp_path = tmp.name
 
         if speaker == "doctor":
-            whisper_prompt = build_whisper_doctor_prompt(dept)
-            logger.info("Doctor Whisper soft-bias department=%s", dept)
+            logger.info("Doctor Whisper prompt=universal clinic")
             original, detected_source = await asyncio.to_thread(
                 transcribe_audio,
                 tmp_path,
                 None,
                 auto_detect_only=True,
-                whisper_prompt=whisper_prompt,
+                whisper_prompt=WHISPER_DOCTOR_PROMPT,
             )
         else:
             original, detected_source = await asyncio.to_thread(
@@ -744,7 +665,6 @@ async def process_audio_session(
                 original,
                 detected_source,
                 dest_lang,
-                department=dept,
             )
             payload = build_ui_payload(
                 {
@@ -820,7 +740,6 @@ async def serve_patient():
 @app.post("/api/transcribe")
 async def api_transcribe(
     audio: UploadFile = File(...),
-    department: str = Form(DEFAULT_DEPARTMENT),
     target_lang: str = Form(""),
     manual_lang: str = Form(""),
 ):
@@ -828,14 +747,10 @@ async def api_transcribe(
     의사 녹음: multipart/form-data로 오디오 파일과 메타데이터를 분리 수신.
     WebSocket과 분리된 안전한 HTTP 파이프라인.
     """
-    global current_session_department
-
-    current_session_department = resolve_department(department)
     audio_bytes = await audio.read()
 
     logger.info(
-        "POST /api/transcribe department=%s bytes=%d filename=%r content_type=%r",
-        current_session_department,
+        "POST /api/transcribe bytes=%d filename=%r content_type=%r",
         len(audio_bytes),
         audio.filename,
         audio.content_type,
@@ -854,7 +769,6 @@ async def api_transcribe(
             audio_bytes=audio_bytes,
             speaker="doctor",
             target_lang=target_override,
-            department=current_session_department,
             upload_filename=audio.filename,
         )
         await manager.broadcast(result)
@@ -885,7 +799,7 @@ if STATIC_DIR.exists():
 @app.websocket("/ws/audio")
 async def websocket_audio(websocket: WebSocket):
     """모든 Origin·외부 IP에서 WebSocket 업그레이드를 허용 (Origin 검사 없음)."""
-    global patient_remote_chunks, current_session_department
+    global patient_remote_chunks
 
     client = websocket.client
     client_addr = f"{client.host}:{client.port}" if client else "unknown"
@@ -925,10 +839,6 @@ async def websocket_audio(websocket: WebSocket):
             if action == "start_patient_record":
                 if manager.get_role(websocket) != "doctor":
                     continue
-                if msg.get("department"):
-                    current_session_department = resolve_department(
-                        msg.get("department")
-                    )
                 patient_remote_chunks.clear()
                 await manager.send_to_displays(
                     {"type": "remote_patient_record", "phase": "start"}
@@ -995,22 +905,6 @@ async def websocket_audio(websocket: WebSocket):
                 payload["manual"] = True
                 payload["detected_language_label_ko"] = label_ko_for_code(locked)
                 await manager.broadcast(payload)
-                continue
-
-            if msg_type == "set_department":
-                if manager.get_role(websocket) != "doctor":
-                    continue
-                current_session_department = resolve_department(msg.get("department"))
-                logger.info("Session department set to %s", current_session_department)
-                await websocket.send_json(
-                    {
-                        "type": "department_ack",
-                        "department": current_session_department,
-                        "department_label_ko": DEPARTMENT_LABEL_KO.get(
-                            current_session_department, current_session_department
-                        ),
-                    }
-                )
                 continue
 
             if msg_type == "reset":
