@@ -177,16 +177,95 @@
         patientUniversalStage.setAttribute("data-ui-state", key);
         var isLive = !!ACTIVE_PATIENT_UI_STATES[key];
         patientUniversalStage.classList.toggle("is-live-status", isLive);
+        var recordingIcon = patientUniversalStage.querySelector(".ui-icon--recording");
+        if (recordingIcon) {
+          recordingIcon.classList.toggle("ui-icon--pulse", isLive && key === "patient_speaking");
+        }
         if (uiHintText) {
           uiHintText.textContent =
             hintOverride != null ? hintOverride : PATIENT_UI_HINTS[key] || "";
         }
       }
 
+      function hideProcessingOverlayOnly() {
+        isProcessing = false;
+        if (!displayProcessing) return;
+        displayProcessing.classList.remove("is-visible");
+        displayProcessing.setAttribute("aria-hidden", "true");
+      }
+
+      function hideRecordingPromptOnly() {
+        isRecording = false;
+        if (!recordingPrompt) return;
+        recordingPrompt.classList.remove("is-visible");
+        recordingPrompt.setAttribute("aria-hidden", "true");
+      }
+
+      /**
+       * 턴 종료 후 UI·플래그 완전 초기화 — 다음 patient_speaking / processing 신호를 받을 준비.
+       * @param {{ keepSubtitle?: boolean, stopMic?: boolean }} opts
+       */
+      function resetPatientUI(opts) {
+        opts = opts || {};
+        isProcessing = false;
+        isRecording = false;
+        pendingReadyAfterTts = false;
+
+        hideProcessingOverlayOnly();
+        hideRecordingPromptOnly();
+
+        if (patientUniversalStage) {
+          patientUniversalStage.classList.remove("is-live-status");
+        }
+        if (subtitleBody) {
+          subtitleBody.classList.remove("is-audio-playing");
+        }
+
+        if (opts.stopMic && isRemoteRecording) {
+          isRemoteRecording = false;
+          if (micRecorder && micRecorder.state !== "inactive") {
+            try {
+              micRecorder.stop();
+            } catch (e) { /* ignore */ }
+          }
+          micRecorder = null;
+        }
+
+        var keepSubtitle =
+          opts.keepSubtitle !== false &&
+          translationView &&
+          translationView.classList.contains("is-visible");
+
+        if (keepSubtitle) {
+          setPatientUiState("subtitle");
+        } else if (clinicAudioInitializedByUser) {
+          setPatientUiState("ready");
+        } else {
+          setPatientUiState("unlock");
+        }
+      }
+
+      function finalizeReadyAfterPlayback() {
+        if (ttsPlaybackActive) {
+          pendingReadyAfterTts = true;
+          if (translationView.classList.contains("is-visible")) {
+            setPatientUiState("subtitle");
+          }
+          return;
+        }
+        resetPatientUI({
+          keepSubtitle: translationView.classList.contains("is-visible"),
+        });
+      }
+
       function applyPatientStatusMessage(msg) {
         if (!msg) return;
         var status = msg.status;
         var speaker = msg.speaker || "doctor";
+
+        if (status === "idle") {
+          status = "ready";
+        }
 
         if (
           status !== "patient_speaking" &&
@@ -198,21 +277,29 @@
         }
 
         if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
-          hideProcessingOverlay();
-          hideRecordingPrompt();
+          pendingReadyAfterTts = false;
+          isProcessing = false;
+          isRecording = true;
+          hideProcessingOverlayOnly();
+          hideRecordingPromptOnly();
           setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
           return;
         }
 
         if (status === "recording" && speaker === "doctor") {
-          hideProcessingOverlay();
-          hideRecordingPrompt();
+          pendingReadyAfterTts = false;
+          isProcessing = false;
+          isRecording = true;
+          hideProcessingOverlayOnly();
+          hideRecordingPromptOnly();
           setPatientUiState("recording", PATIENT_UI_HINTS.recording);
           return;
         }
 
         if (status === "processing") {
-          hideRecordingPrompt();
+          isProcessing = true;
+          isRecording = false;
+          hideRecordingPromptOnly();
           var processingHint =
             speaker === "patient"
               ? PATIENT_UI_HINTS.processing_patient
@@ -223,15 +310,14 @@
         }
 
         if (status === "ready") {
-          hideProcessingOverlay();
-          hideRecordingPrompt();
-          if (translationView.classList.contains("is-visible")) {
-            setPatientUiState("subtitle");
-          } else if (clinicAudioInitializedByUser) {
-            setPatientUiState("ready");
-          } else {
-            setPatientUiState("unlock");
+          isProcessing = false;
+          isRecording = false;
+          hideProcessingOverlayOnly();
+          hideRecordingPromptOnly();
+          if (patientUniversalStage) {
+            patientUniversalStage.classList.remove("is-live-status");
           }
+          finalizeReadyAfterPlayback();
         }
       }
 
@@ -286,7 +372,11 @@
       var micStream = null;
       var micRecorder = null;
       var isRemoteRecording = false;
+      var isProcessing = false;
+      var isRecording = false;
       var micReady = false;
+      var ttsPlaybackActive = false;
+      var pendingReadyAfterTts = false;
 
       function blobToBase64(blob) {
         return new Promise(function (resolve, reject) {
@@ -336,7 +426,8 @@
       }
 
       async function startRemotePatientRecording() {
-        if (isRemoteRecording || !hasCompletedUnlockFlow()) return;
+        if (isRemoteRecording) return;
+        if (!hasCompletedUnlockFlow()) return;
         await connectWebSocket();
         await preparePatientMic();
         var mimeType = getSupportedMimeType();
@@ -350,8 +441,9 @@
         };
         micRecorder.start(250);
         isRemoteRecording = true;
-        hideProcessingOverlay();
-        showRecordingPrompt();
+        isRecording = true;
+        hideProcessingOverlayOnly();
+        setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
         if (languageLocked) {
           showTranslationScreen();
         }
@@ -360,7 +452,8 @@
       function stopRemotePatientRecording() {
         if (!isRemoteRecording || !micRecorder) return;
         isRemoteRecording = false;
-        hideRecordingPrompt();
+        isRecording = false;
+        hideRecordingPromptOnly();
         var recorder = micRecorder;
         micRecorder = null;
         recorder.onstop = function () {
@@ -501,14 +594,24 @@
         });
       }
 
+      function onTtsPlaybackEnded() {
+        ttsPlaybackActive = false;
+        stopPatientAudio();
+        if (pendingReadyAfterTts) {
+          pendingReadyAfterTts = false;
+          resetPatientUI({
+            keepSubtitle: translationView.classList.contains("is-visible"),
+          });
+        }
+      }
+
       function playDecodedBuffer(ctx, audioBuffer) {
         if (!audioCtx || audioCtx !== ctx) return;
         ttsSourceNode = ctx.createBufferSource();
         ttsSourceNode.buffer = audioBuffer;
         ttsSourceNode.connect(ctx.destination);
-        ttsSourceNode.onended = function () {
-          stopPatientAudio();
-        };
+        ttsPlaybackActive = true;
+        ttsSourceNode.onended = onTtsPlaybackEnded;
         ttsSourceNode.start(0);
       }
 
@@ -521,6 +624,8 @@
         var blob = new Blob([arrayBuffer], { type: mime || "audio/mpeg" });
         var url = URL.createObjectURL(blob);
         htmlAudioFallback.src = url;
+        htmlAudioFallback.onended = onTtsPlaybackEnded;
+        ttsPlaybackActive = true;
         return htmlAudioFallback.play().then(
           function () {
             try {
@@ -528,6 +633,8 @@
             } catch (e) { /* ignore */ }
           },
           function (playErr) {
+            ttsPlaybackActive = false;
+            htmlAudioFallback.onended = null;
             try {
               URL.revokeObjectURL(url);
             } catch (e) { /* ignore */ }
@@ -616,6 +723,13 @@
       }
 
       function stopPatientAudio() {
+        ttsPlaybackActive = false;
+        if (htmlAudioFallback) {
+          htmlAudioFallback.onended = null;
+          try {
+            htmlAudioFallback.pause();
+          } catch (e) { /* ignore */ }
+        }
         if (ttsSourceNode) {
           ttsSourceNode.onended = null;
           try {
@@ -773,10 +887,8 @@
         languageLocked = false;
         stopPatientAudio();
         if (isRemoteRecording) stopRemotePatientRecording();
-        hideProcessingOverlay();
-        hideRecordingPrompt();
         hideAudioUnlockOverlay();
-        setPatientUiState("ready");
+        resetPatientUI({ keepSubtitle: false, stopMic: true });
         welcomeScreen.classList.remove("is-hidden");
         welcomeScreen.setAttribute("aria-hidden", "false");
         translationView.classList.remove("is-visible");
@@ -789,47 +901,40 @@
         welcomeScreen.classList.add("is-hidden");
         welcomeScreen.setAttribute("aria-hidden", "true");
         translationView.classList.add("is-visible");
-        if (
-          !recordingPrompt.classList.contains("is-visible") &&
-          !displayProcessing.classList.contains("is-visible")
-        ) {
+        if (!isProcessing && !isRecording) {
           setPatientUiState("subtitle");
         }
         if (labelKo) setDetectedBadge("detected", labelKo);
       }
 
       function showProcessingOverlay() {
-        hideRecordingPrompt();
+        isProcessing = true;
+        isRecording = false;
+        hideRecordingPromptOnly();
         setPatientUiState("processing");
-        displayProcessing.classList.add("is-visible");
-        displayProcessing.setAttribute("aria-hidden", "false");
+        if (displayProcessing) {
+          displayProcessing.classList.add("is-visible");
+          displayProcessing.setAttribute("aria-hidden", "false");
+        }
       }
 
       function hideProcessingOverlay() {
-        displayProcessing.classList.remove("is-visible");
-        displayProcessing.setAttribute("aria-hidden", "true");
-        if (!recordingPrompt.classList.contains("is-visible") && !welcomeScreen.classList.contains("is-hidden")) {
-          setPatientUiState("ready");
-        }
+        hideProcessingOverlayOnly();
       }
 
       function showRecordingPrompt() {
-        hideProcessingOverlay();
+        isRecording = true;
+        isProcessing = false;
+        hideProcessingOverlayOnly();
         setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
-        recordingPrompt.classList.add("is-visible");
-        recordingPrompt.setAttribute("aria-hidden", "false");
+        if (recordingPrompt) {
+          recordingPrompt.classList.add("is-visible");
+          recordingPrompt.setAttribute("aria-hidden", "false");
+        }
       }
 
       function hideRecordingPrompt() {
-        recordingPrompt.classList.remove("is-visible");
-        recordingPrompt.setAttribute("aria-hidden", "true");
-        if (!displayProcessing.classList.contains("is-visible")) {
-          if (translationView.classList.contains("is-visible")) {
-            setPatientUiState("subtitle");
-          } else if (!welcomeScreen.classList.contains("is-hidden")) {
-            setPatientUiState("ready");
-          }
-        }
+        hideRecordingPromptOnly();
       }
 
       function applySessionState(msg) {
@@ -884,14 +989,24 @@
         }
 
         if (msg.type === "remote_patient_record") {
-          if (!hasCompletedUnlockFlow()) return;
           if (msg.phase === "start") {
-            startRemotePatientRecording().catch(function (err) {
-              reportPatientError("mic", err);
-              hideRecordingPrompt();
+            applyPatientStatusMessage({
+              type: "status",
+              status: "patient_speaking",
+              speaker: "patient",
             });
+            if (hasCompletedUnlockFlow()) {
+              startRemotePatientRecording().catch(function (err) {
+                reportPatientError("mic", err);
+                hideRecordingPromptOnly();
+              });
+            }
           } else if (msg.phase === "stop") {
-            stopRemotePatientRecording();
+            isRecording = false;
+            hideRecordingPromptOnly();
+            if (isRemoteRecording) {
+              stopRemotePatientRecording();
+            }
           }
           return;
         }
@@ -905,18 +1020,8 @@
         if (msg.type === "reset" || msg.stop_audio) {
           languageLocked = false;
           stopPatientAudio();
-          if (isRemoteRecording) {
-            isRemoteRecording = false;
-            if (micRecorder && micRecorder.state !== "inactive") {
-              try {
-                micRecorder.stop();
-              } catch (e) { /* ignore */ }
-            }
-            micRecorder = null;
-          }
+          resetPatientUI({ keepSubtitle: false, stopMic: true });
           if (msg.type === "reset" && clinicAudioInitializedByUser) {
-            hideProcessingOverlay();
-            hideRecordingPrompt();
             showWelcomeScreen();
           }
           return;
@@ -932,8 +1037,10 @@
         }
 
         if (msg.type === "error") {
-          hideProcessingOverlay();
-          hideRecordingPrompt();
+          resetPatientUI({
+            keepSubtitle: translationView.classList.contains("is-visible"),
+            stopMic: true,
+          });
           if (msg.message) {
             reportPatientError("server", new Error(msg.message));
           }
@@ -941,15 +1048,17 @@
         }
 
         if (msg.type === "result") {
-          if (!clinicAudioInitializedByUser) return;
-          hideProcessingOverlay();
-          hideRecordingPrompt();
-          showTranslationScreen(msg.detected_language_label_ko || null);
-          languageLocked = true;
-          var displayText = extractDisplayText(msg);
-          updateSubtitle(displayText, msg.speaker);
-          if (msg.detected_language_label_ko) {
-            setDetectedBadge("detected", msg.detected_language_label_ko);
+          isProcessing = false;
+          hideProcessingOverlayOnly();
+          hideRecordingPromptOnly();
+          if (clinicAudioInitializedByUser) {
+            showTranslationScreen(msg.detected_language_label_ko || null);
+            languageLocked = true;
+            var displayText = extractDisplayText(msg);
+            updateSubtitle(displayText, msg.speaker);
+            if (msg.detected_language_label_ko) {
+              setDetectedBadge("detected", msg.detected_language_label_ko);
+            }
           }
         }
       }

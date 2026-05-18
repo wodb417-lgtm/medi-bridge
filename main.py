@@ -151,7 +151,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 PATIENT_UI_STATUSES = frozenset(
-    {"recording", "processing", "ready", "patient_speaking"}
+    {"recording", "processing", "ready", "idle", "patient_speaking"}
 )
 
 # 의사 → 서버 state_change → 환자 디스플레이 status
@@ -166,6 +166,8 @@ STATE_CHANGE_TO_DISPLAY: dict[str, tuple[str, str]] = {
 
 async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> None:
     """환자 디스플레이에만 UI 상태 패킷 전송."""
+    if status == "idle":
+        status = "ready"
     if status not in PATIENT_UI_STATUSES:
         return
     payload = {"type": "status", "status": status, "speaker": speaker}
@@ -185,6 +187,7 @@ async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
             speaker="patient",
         )
         await manager.broadcast(result)
+        await asyncio.sleep(0)
         await broadcast_patient_status("ready", speaker="patient")
     except Exception as exc:
         logger.exception("patient audio pipeline failed")
@@ -195,6 +198,7 @@ async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
                 "speaker": "patient",
             }
         )
+        await asyncio.sleep(0)
         await broadcast_patient_status("ready", speaker="patient")
 
 
@@ -835,6 +839,7 @@ async def api_transcribe(
             upload_filename=audio.filename,
         )
         await manager.broadcast(result)
+        await asyncio.sleep(0)
         await broadcast_patient_status("ready", speaker="doctor")
         return result
     except Exception as exc:
@@ -842,6 +847,7 @@ async def api_transcribe(
         await manager.broadcast(
             {"type": "error", "message": str(exc), "speaker": "doctor"}
         )
+        await asyncio.sleep(0)
         await broadcast_patient_status("ready", speaker="doctor")
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
