@@ -206,6 +206,17 @@ async def broadcast_ui_status(status: str, *, speaker: str = "doctor") -> None:
     await manager.broadcast_all(payload)
 
 
+async def broadcast_universal_ready() -> None:
+    """전사·번역 턴 종료 후 의사·환자 모두에 ready — 화자와 무관하게 양쪽 동기화."""
+    payload = {"type": "status", "status": "ready", "speaker": "all"}
+    logger.info(
+        "broadcast_universal_ready → doctors=%d patients=%d",
+        len(manager.doctor_sockets),
+        len(manager.patient_sockets),
+    )
+    await manager.broadcast_all(payload)
+
+
 async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> None:
     """레거시 별칭 — 양쪽 동기화."""
     await broadcast_ui_status(status, speaker=speaker)
@@ -214,7 +225,7 @@ async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> N
 async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
     """환자 오디오 처리 — WebSocket 수신 루프를 막지 않도록 백그라운드 실행."""
     if not audio_bytes:
-        await broadcast_patient_status("ready", speaker="patient")
+        await broadcast_universal_ready()
         return
     try:
         await broadcast_patient_status("processing", speaker="patient")
@@ -224,7 +235,7 @@ async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
         )
         await manager.broadcast_all(result)
         await asyncio.sleep(0)
-        await broadcast_ui_status("ready", speaker="patient")
+        await broadcast_universal_ready()
     except Exception as exc:
         logger.exception("patient audio pipeline failed")
         await manager.broadcast_all(
@@ -235,7 +246,7 @@ async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
             }
         )
         await asyncio.sleep(0)
-        await broadcast_ui_status("ready", speaker="patient")
+        await broadcast_universal_ready()
 
 
 async def relay_state_change(msg: dict) -> None:
@@ -888,7 +899,7 @@ async def api_transcribe(
         )
         await manager.broadcast_all(result)
         await asyncio.sleep(0)
-        await broadcast_ui_status("ready", speaker=speaker_norm)
+        await broadcast_universal_ready()
         return result
     except Exception as exc:
         logger.exception("api/transcribe failed")
@@ -896,7 +907,7 @@ async def api_transcribe(
             {"type": "error", "message": str(exc), "speaker": speaker_norm}
         )
         await asyncio.sleep(0)
-        await broadcast_ui_status("ready", speaker=speaker_norm)
+        await broadcast_universal_ready()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

@@ -199,17 +199,55 @@
       }
 
       function hideProcessingOverlayOnly() {
-        isProcessing = false;
         if (!displayProcessing) return;
         displayProcessing.classList.remove("is-visible");
         displayProcessing.setAttribute("aria-hidden", "true");
       }
 
       function hideRecordingPromptOnly() {
-        isRecording = false;
         if (!recordingPrompt) return;
         recordingPrompt.classList.remove("is-visible");
         recordingPrompt.setAttribute("aria-hidden", "true");
+      }
+
+      /**
+       * TTS 재생·pendingReady 등 모든 잠금을 무시하고 patient_speaking UI로 강제 전환.
+       * 의사 턴 직후 환자 턴(교차 턴) 동기화 교착 방지.
+       */
+      function forcePatientSpeakingSync(hintOverride) {
+        stopPatientAudio(true);
+        ttsPlaybackActive = false;
+        pendingReadyAfterTts = false;
+        isProcessing = false;
+        isRecording = true;
+
+        hideProcessingOverlayOnly();
+        hideRecordingPromptOnly();
+
+        if (subtitleBody) {
+          subtitleBody.classList.remove("is-audio-playing");
+        }
+        if (patientUniversalStage) {
+          patientUniversalStage.classList.remove("is-audio-playing");
+        }
+
+        setPatientUiState(
+          "patient_speaking",
+          hintOverride != null ? hintOverride : PATIENT_UI_HINTS.patient_speaking
+        );
+        updatePatientSelfSpeakAvailability();
+      }
+
+      function isPatientSpeakingWsMessage(msg) {
+        if (!msg || typeof msg !== "object") return false;
+        if (msg.type === "state_change" && msg.state === "patient_speaking") {
+          return true;
+        }
+        if (msg.type === "status") {
+          if (msg.status === "patient_speaking") return true;
+          if (msg.status === "recording" && msg.speaker === "patient") return true;
+        }
+        return false;
       }
 
       /**
@@ -305,15 +343,7 @@
         }
 
         if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
-          pendingReadyAfterTts = false;
-          isProcessing = false;
-          isRecording = true;
-          hideProcessingOverlayOnly();
-          hideRecordingPromptOnly();
-          if (!isPatientDirectSpeaking) {
-            setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
-          }
-          updatePatientSelfSpeakAvailability();
+          forcePatientSpeakingSync(PATIENT_UI_HINTS.patient_speaking);
           return;
         }
 
@@ -779,13 +809,11 @@
 
       function onTtsPlaybackEnded() {
         ttsPlaybackActive = false;
-        stopPatientAudio();
-        if (pendingReadyAfterTts) {
-          pendingReadyAfterTts = false;
-          resetPatientUI({
-            keepSubtitle: translationView.classList.contains("is-visible"),
-          });
-        }
+        pendingReadyAfterTts = false;
+        stopPatientAudio(true);
+        resetPatientUI({
+          keepSubtitle: translationView.classList.contains("is-visible"),
+        });
       }
 
       function playDecodedBuffer(ctx, audioBuffer) {
@@ -905,12 +933,16 @@
         });
       }
 
-      function stopPatientAudio() {
+      function stopPatientAudio(hardStop) {
         ttsPlaybackActive = false;
+        if (hardStop) {
+          pendingReadyAfterTts = false;
+        }
         if (htmlAudioFallback) {
           htmlAudioFallback.onended = null;
           try {
             htmlAudioFallback.pause();
+            htmlAudioFallback.currentTime = 0;
           } catch (e) { /* ignore */ }
         }
         if (ttsSourceNode) {
@@ -1121,6 +1153,7 @@
       }
 
       function hideRecordingPrompt() {
+        isRecording = false;
         hideRecordingPromptOnly();
       }
 
@@ -1155,6 +1188,10 @@
         if (!msg || typeof msg !== "object") return;
 
         if (msg.type === "registered" || msg.type === "pong") return;
+
+        if (isPatientSpeakingWsMessage(msg)) {
+          forcePatientSpeakingSync(PATIENT_UI_HINTS.patient_speaking);
+        }
 
         if (msg.type === "status") {
           applyPatientStatusMessage(msg);
@@ -1207,7 +1244,7 @@
 
         if (msg.type === "reset" || msg.stop_audio) {
           languageLocked = false;
-          stopPatientAudio();
+          stopPatientAudio(true);
           resetPatientUI({ keepSubtitle: false, stopMic: true });
           if (msg.type === "reset" && clinicAudioInitializedByUser) {
             showWelcomeScreen();
