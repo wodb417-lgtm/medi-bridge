@@ -31,6 +31,23 @@
     <main class="panels panels--single">
       <section class="panel panel--patient display-main" aria-label="환자 번역 화면">
         <div class="display-stage">
+          <div id="status-force-layer" class="status-force-layer" style="display: none;" aria-live="assertive">
+            <div id="status-container" class="status-force-panel" style="display: none;" role="status" aria-label="환자 말하기">
+              <div class="status-force-panel__icon status-force-panel__icon--mic" aria-hidden="true">
+                <i class="fas fa-microphone"></i>
+              </div>
+              <p class="status-force-panel__title">지금 말씀하세요</p>
+              <p class="status-force-panel__sub">Listening...</p>
+            </div>
+            <div id="status-container-processing" class="status-force-panel" style="display: none;" role="status" aria-label="번역 처리 중">
+              <div class="status-force-panel__icon status-force-panel__icon--spin" aria-hidden="true">
+                <i class="fas fa-spinner fa-spin"></i>
+              </div>
+              <p class="status-force-panel__title">번역 중</p>
+              <p class="status-force-panel__sub">잠시만 기다려 주세요</p>
+            </div>
+          </div>
+
           <div id="audio-unlock-overlay" class="audio-unlock-overlay" aria-hidden="false">
             <div class="audio-unlock-overlay__panel">
               <p class="audio-unlock-overlay__title">MediBridge 환자 모니터</p>
@@ -166,6 +183,9 @@
       var recordingPrompt = document.getElementById("recording-prompt");
       var patientUniversalStage = document.getElementById("patient-universal-stage");
       var uiHintText = document.getElementById("ui-hint-text");
+      var statusForceLayer = document.getElementById("status-force-layer");
+      var statusContainerMic = document.getElementById("status-container");
+      var statusContainerProcessing = document.getElementById("status-container-processing");
 
       var PATIENT_UI_HINTS = {
         ready: "READY · 대기",
@@ -210,6 +230,120 @@
         recordingPrompt.setAttribute("aria-hidden", "true");
       }
 
+      /** style.display 직접 조작 — classList/z-index 묻힘 방지 */
+      function forceElDisplay(el, mode) {
+        if (!el) return;
+        if (mode === "flex") {
+          el.style.display = "flex";
+          el.style.visibility = "visible";
+          el.style.opacity = "1";
+          el.style.pointerEvents = "auto";
+        } else if (mode === "block") {
+          el.style.display = "block";
+          el.style.visibility = "visible";
+          el.style.opacity = "1";
+          el.style.pointerEvents = "auto";
+        } else {
+          el.style.display = "none";
+          el.style.visibility = "hidden";
+          el.style.pointerEvents = "none";
+        }
+      }
+
+      function clearElDisplayOverride(el) {
+        if (!el) return;
+        el.style.display = "";
+        el.style.visibility = "";
+        el.style.opacity = "";
+        el.style.pointerEvents = "";
+        el.style.zIndex = "";
+      }
+
+      /**
+       * WebSocket status → DOM 강제 전환 (최우선)
+       * patient_speaking | processing | ready
+       */
+      function forceStatusDisplayOverride(status, speaker) {
+        try {
+          var st = (status || "").trim();
+          var spk = (speaker || "doctor").trim();
+          if (st === "idle") st = "ready";
+
+          if (st === "patient_speaking" || (st === "recording" && spk === "patient")) {
+            if (statusForceLayer) {
+              statusForceLayer.style.display = "block";
+              statusForceLayer.style.zIndex = "10000";
+              statusForceLayer.style.position = "absolute";
+              statusForceLayer.style.inset = "0";
+            }
+            forceElDisplay(statusContainerMic, "flex");
+            forceElDisplay(statusContainerProcessing, "none");
+            forceElDisplay(welcomeScreen, "none");
+            forceElDisplay(translationView, "none");
+            if (patientUniversalStage) forceElDisplay(patientUniversalStage, "none");
+            if (displayProcessing) forceElDisplay(displayProcessing, "none");
+            if (recordingPrompt) forceElDisplay(recordingPrompt, "none");
+            return;
+          }
+
+          if (st === "processing") {
+            if (statusForceLayer) {
+              statusForceLayer.style.display = "block";
+              statusForceLayer.style.zIndex = "10000";
+              statusForceLayer.style.position = "absolute";
+              statusForceLayer.style.inset = "0";
+            }
+            forceElDisplay(statusContainerMic, "none");
+            forceElDisplay(statusContainerProcessing, "flex");
+            forceElDisplay(welcomeScreen, "none");
+            forceElDisplay(translationView, "none");
+            if (patientUniversalStage) forceElDisplay(patientUniversalStage, "none");
+            if (displayProcessing) forceElDisplay(displayProcessing, "flex");
+            if (recordingPrompt) forceElDisplay(recordingPrompt, "none");
+            return;
+          }
+
+          if (st === "ready") {
+            forceElDisplay(statusContainerMic, "none");
+            forceElDisplay(statusContainerProcessing, "none");
+            if (statusForceLayer) forceElDisplay(statusForceLayer, "none");
+            if (displayProcessing) forceElDisplay(displayProcessing, "none");
+            if (recordingPrompt) forceElDisplay(recordingPrompt, "none");
+            clearElDisplayOverride(patientUniversalStage);
+
+            var showSubtitle =
+              translationView &&
+              translationView.classList.contains("is-visible");
+            if (showSubtitle) {
+              forceElDisplay(translationView, "block");
+              forceElDisplay(welcomeScreen, "none");
+            } else if (clinicAudioInitializedByUser) {
+              forceElDisplay(welcomeScreen, "block");
+              forceElDisplay(translationView, "none");
+            } else {
+              forceElDisplay(welcomeScreen, "none");
+              forceElDisplay(translationView, "none");
+            }
+            return;
+          }
+
+          if (st === "recording" && spk === "doctor") {
+            forceElDisplay(statusContainerMic, "none");
+            forceElDisplay(statusContainerProcessing, "none");
+            if (statusForceLayer) forceElDisplay(statusForceLayer, "none");
+            forceElDisplay(welcomeScreen, "none");
+            forceElDisplay(translationView, "none");
+            if (patientUniversalStage) {
+              clearElDisplayOverride(patientUniversalStage);
+              forceElDisplay(patientUniversalStage, "flex");
+            }
+          }
+        } catch (domErr) {
+          console.error("[forceStatusDisplayOverride]", domErr);
+          reportPatientError("status-DOM", domErr);
+        }
+      }
+
       /** 규칙 4: patient_speaking — 오디오·로딩 전부 끊고 마이크 UI 최우선 */
       function nukePatientSpeaking(hintOverride) {
         try {
@@ -245,6 +379,7 @@
             "patient_speaking",
             hintOverride != null ? hintOverride : PATIENT_UI_HINTS.patient_speaking
           );
+          forceStatusDisplayOverride("patient_speaking", "patient");
           updatePatientSelfSpeakAvailability();
         } catch (err) {
           console.error("[nukePatientSpeaking]", err);
@@ -321,6 +456,11 @@
           setPatientUiState("unlock");
         }
         updatePatientSelfSpeakAvailability();
+        if (opts.keepSubtitle && translationView && translationView.classList.contains("is-visible")) {
+          forceStatusDisplayOverride("ready", "all");
+        } else if (clinicAudioInitializedByUser) {
+          forceStatusDisplayOverride("ready", "all");
+        }
       }
 
       function finalizeReadyAfterPlayback() {
@@ -356,16 +496,19 @@
 
         if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
           nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
+          forceStatusDisplayOverride(status, speaker);
           return;
         }
 
         if (status === "recording" && speaker === "doctor") {
+          forceStatusDisplayOverride(status, speaker);
           pendingReadyAfterTts = false;
           isProcessing = false;
           isRecording = true;
           hideProcessingOverlayOnly();
           hideRecordingPromptOnly();
           setPatientUiState("recording", PATIENT_UI_HINTS.recording);
+          forceStatusDisplayOverride(status, speaker);
           return;
         }
 
@@ -380,6 +523,7 @@
           setPatientUiState("processing", processingHint);
           if (languageLocked) setDetectedBadge("detecting", "처리 중…");
           updatePatientSelfSpeakAvailability();
+          forceStatusDisplayOverride(status, speaker);
           return;
         }
 
@@ -391,6 +535,7 @@
           if (patientUniversalStage) {
             patientUniversalStage.classList.remove("is-live-status");
           }
+          forceStatusDisplayOverride(status, speaker);
           finalizeReadyAfterPlayback();
           updatePatientSelfSpeakAvailability();
         }
@@ -1364,6 +1509,29 @@
           }
 
           if (msg) {
+            if (msg.type === "status") {
+              try {
+                forceStatusDisplayOverride(msg.status, msg.speaker || "doctor");
+              } catch (statusDomErr) {
+                console.error("[onWebSocketMessage] status DOM", statusDomErr);
+              }
+            } else if (msg.type === "state_change") {
+              try {
+                var mappedState = msg.state;
+                var mappedSpeaker = msg.speaker || "doctor";
+                if (mappedState === "patient_speaking") {
+                  forceStatusDisplayOverride("patient_speaking", mappedSpeaker || "patient");
+                } else if (mappedState === "doctor_speaking" || mappedState === "recording") {
+                  forceStatusDisplayOverride("recording", "doctor");
+                } else if (mappedState === "processing") {
+                  forceStatusDisplayOverride("processing", mappedSpeaker);
+                } else if (mappedState === "ready") {
+                  forceStatusDisplayOverride("ready", mappedSpeaker);
+                }
+              } catch (stateDomErr) {
+                console.error("[onWebSocketMessage] state_change DOM", stateDomErr);
+              }
+            }
             if (isPatientSpeakingSignal(msg)) {
               nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
             }

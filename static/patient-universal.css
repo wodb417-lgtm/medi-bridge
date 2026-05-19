@@ -5,6 +5,64 @@
 
 body.patient-display .display-stage {
   background: var(--mb-white);
+  position: relative;
+}
+
+/* WebSocket status 강제 오버레이 — JS가 style.display로 제어 */
+.status-force-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--mb-white);
+  pointer-events: none;
+}
+
+.status-force-panel {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  width: 100%;
+  height: 100%;
+  padding: 2rem;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.status-force-panel__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(5.5rem, 20vw, 9.5rem);
+  height: clamp(5.5rem, 20vw, 9.5rem);
+}
+
+.status-force-panel__icon--mic i.fas {
+  font-size: clamp(4.25rem, 14vw, 7rem);
+  color: var(--mb-accent, #e85d04);
+}
+
+.status-force-panel__icon--spin i.fas {
+  font-size: clamp(3.5rem, 12vw, 6rem);
+  color: var(--mb-navy, #002855);
+}
+
+.status-force-panel__title {
+  margin: 0;
+  font-size: clamp(1.35rem, 4.5vw, 2rem);
+  font-weight: 700;
+  color: var(--mb-navy, #002855);
+  line-height: 1.3;
+}
+
+.status-force-panel__sub {
+  margin: 0;
+  font-size: clamp(0.95rem, 3vw, 1.15rem);
+  color: rgba(0, 40, 85, 0.65);
 }
 
 body.patient-display .header {
