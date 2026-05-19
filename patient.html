@@ -210,39 +210,51 @@
         recordingPrompt.setAttribute("aria-hidden", "true");
       }
 
-      /**
-       * TTS 재생·pendingReady 등 모든 잠금을 무시하고 patient_speaking UI로 강제 전환.
-       * 의사 턴 직후 환자 턴(교차 턴) 동기화 교착 방지.
-       */
-      function forcePatientSpeakingSync(hintOverride) {
-        stopPatientAudio(true);
-        ttsPlaybackActive = false;
-        pendingReadyAfterTts = false;
-        isProcessing = false;
-        isRecording = true;
+      /** 규칙 4: patient_speaking — 오디오·로딩 전부 끊고 마이크 UI 최우선 */
+      function nukePatientSpeaking(hintOverride) {
+        try {
+          ttsPlaybackActive = false;
+          pendingReadyAfterTts = false;
+          isProcessing = false;
+          isRecording = true;
 
-        hideProcessingOverlayOnly();
-        hideRecordingPromptOnly();
+          stopPatientAudio(true);
+          if (htmlAudioFallback) {
+            try {
+              htmlAudioFallback.pause();
+              htmlAudioFallback.currentTime = 0;
+            } catch (audioErr) {
+              console.error("[nukePatientSpeaking] htmlAudio pause", audioErr);
+            }
+          }
 
-        if (subtitleBody) {
-          subtitleBody.classList.remove("is-audio-playing");
+          hideProcessingOverlayOnly();
+          hideRecordingPromptOnly();
+          if (displayProcessing) {
+            displayProcessing.classList.remove("is-visible");
+            displayProcessing.setAttribute("aria-hidden", "true");
+          }
+          if (subtitleBody) {
+            subtitleBody.classList.remove("is-audio-playing");
+          }
+          if (patientUniversalStage) {
+            patientUniversalStage.classList.remove("is-audio-playing");
+          }
+
+          setPatientUiState(
+            "patient_speaking",
+            hintOverride != null ? hintOverride : PATIENT_UI_HINTS.patient_speaking
+          );
+          updatePatientSelfSpeakAvailability();
+        } catch (err) {
+          console.error("[nukePatientSpeaking]", err);
+          reportPatientError("nuke", err);
         }
-        if (patientUniversalStage) {
-          patientUniversalStage.classList.remove("is-audio-playing");
-        }
-
-        setPatientUiState(
-          "patient_speaking",
-          hintOverride != null ? hintOverride : PATIENT_UI_HINTS.patient_speaking
-        );
-        updatePatientSelfSpeakAvailability();
       }
 
-      function isPatientSpeakingWsMessage(msg) {
+      function isPatientSpeakingSignal(msg) {
         if (!msg || typeof msg !== "object") return false;
-        if (msg.type === "state_change" && msg.state === "patient_speaking") {
-          return true;
-        }
+        if (msg.type === "state_change" && msg.state === "patient_speaking") return true;
         if (msg.type === "status") {
           if (msg.status === "patient_speaking") return true;
           if (msg.status === "recording" && msg.speaker === "patient") return true;
@@ -343,7 +355,7 @@
         }
 
         if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
-          forcePatientSpeakingSync(PATIENT_UI_HINTS.patient_speaking);
+          nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
           return;
         }
 
@@ -430,7 +442,9 @@
       /** 이번 페이지 방문에서 사용자가 연결 버튼을 눌러 오디오를 초기화했는지 */
       var clinicAudioInitializedByUser = false;
       var ws = null;
-      var wsConnectPromise = null;
+      var wsReconnectTimer = null;
+      var wsDesiredConnect = true;
+      var WS_RECONNECT_MS = 1000;
 
       var micStream = null;
       var micRecorder = null;
@@ -491,16 +505,18 @@
       }
 
       function sendPatientWs(payload) {
-        if (!ws || ws.readyState !== WebSocket.OPEN) throw new Error("서버와 연결되어 있지 않습니다.");
-        ws.send(JSON.stringify(payload));
+        return connectWebSocket().then(function (socket) {
+          if (!socket || socket.readyState !== WebSocket.OPEN) {
+            throw new Error("서버와 연결되어 있지 않습니다.");
+          }
+          socket.send(JSON.stringify(payload));
+        });
       }
 
       function sendPatientStateChange(state, speaker) {
         var payload = { type: "state_change", state: state };
         if (speaker) payload.speaker = speaker;
-        return connectWebSocket().then(function () {
-          sendPatientWs(payload);
-        });
+        return sendPatientWs(payload);
       }
 
       function extensionForMime(mime) {
@@ -1167,31 +1183,65 @@
         }
       }
 
-      function parseJsonMessage(data) {
+      /* ============================================================
+       * WebSocket — 연결·수신 (처음부터 재작성)
+       * 1) 1초마다 무한 재연결  2) onmessage 첫 줄 디버그 로그
+       * 3) try/catch 방어막      4) patient_speaking Nuke 최우선
+       * ============================================================ */
+
+      function wsParseJson(data) {
         if (data == null) return null;
         if (typeof data === "string") {
           var trimmed = data.trim();
           if (!trimmed) return null;
           return JSON.parse(trimmed);
         }
-        if (typeof data === "object" && !(data instanceof ArrayBuffer) && !(typeof Blob !== "undefined" && data instanceof Blob)) {
+        if (
+          typeof data === "object" &&
+          !(data instanceof ArrayBuffer) &&
+          !(typeof Blob !== "undefined" && data instanceof Blob)
+        ) {
           return data;
         }
         return null;
       }
 
-      function isBinaryWebSocketData(data) {
+      function wsIsBinary(data) {
         return data instanceof ArrayBuffer || (typeof Blob !== "undefined" && data instanceof Blob);
       }
 
-      function handleServerMessageUi(msg) {
+      function wsUpdateConnectionBadge() {
+        try {
+          if (clinicAudioInitializedByUser) {
+            setConnectionStatus("ok", "🟢 진료실 연결 완료");
+          } else {
+            setConnectionStatus("warn", "서버 연결됨 · 스피커·마이크 연결 필요");
+          }
+        } catch (err) {
+          console.error("[wsUpdateConnectionBadge]", err);
+        }
+      }
+
+      function wsHandleResultTts(msg) {
+        try {
+          if (!msg || msg.type !== "result" || msg.speaker !== "doctor") return;
+          if (
+            msg.tts_audio_b64 ||
+            msg.tts_audio_url ||
+            (msg.tts_format === "base64" && msg.tts_audio)
+          ) {
+            scheduleTtsFromMessage(msg);
+          }
+        } catch (err) {
+          console.error("[wsHandleResultTts]", err);
+          reportPatientError("TTS-schedule", err);
+        }
+      }
+
+      function wsRouteJsonMessage(msg) {
         if (!msg || typeof msg !== "object") return;
 
         if (msg.type === "registered" || msg.type === "pong") return;
-
-        if (isPatientSpeakingWsMessage(msg)) {
-          forcePatientSpeakingSync(PATIENT_UI_HINTS.patient_speaking);
-        }
 
         if (msg.type === "status") {
           applyPatientStatusMessage(msg);
@@ -1215,11 +1265,7 @@
         if (msg.type === "remote_patient_record") {
           if (isPatientDirectSpeaking) return;
           if (msg.phase === "start") {
-            applyPatientStatusMessage({
-              type: "status",
-              status: "patient_speaking",
-              speaker: "patient",
-            });
+            nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
             if (hasCompletedUnlockFlow()) {
               startRemotePatientRecording().catch(function (err) {
                 reportPatientError("mic", err);
@@ -1288,99 +1334,172 @@
         }
       }
 
-      function handleServerMessageAudio(msg) {
-        if (!msg || msg.type !== "result" || msg.speaker !== "doctor") return;
-        if (msg.tts_audio_b64 || msg.tts_audio_url || (msg.tts_format === "base64" && msg.tts_audio)) {
-          scheduleTtsFromMessage(msg);
+      function wsHandleBinaryPayload(data) {
+        try {
+          if (data instanceof ArrayBuffer) {
+            return playTtsFromArrayBuffer(data, "audio/mpeg");
+          }
+          return data.arrayBuffer().then(function (buf) {
+            return playTtsFromArrayBuffer(buf, data.type || "audio/mpeg");
+          });
+        } catch (err) {
+          console.error("[wsHandleBinaryPayload]", err);
+          reportPatientError("binary-TTS", err);
+          return Promise.resolve();
         }
       }
 
-      function dispatchWebSocketData(data) {
-        var msg = null;
+      function onWebSocketMessage(event) {
+        var message = event.data;
+        console.log("🔥 서버에서 받은 신호:", message);
+
         try {
-          msg = parseJsonMessage(data);
-        } catch (parseErr) {
-          reportPatientError("JSON", parseErr);
-          return;
-        }
-
-        if (msg) {
+          var msg = null;
           try {
-            handleServerMessageUi(msg);
-          } catch (uiErr) {
-            reportPatientError("UI", uiErr);
+            msg = wsParseJson(message);
+          } catch (parseErr) {
+            console.error("[onWebSocketMessage] JSON parse", parseErr);
+            reportPatientError("JSON", parseErr);
+            return;
           }
-          try {
-            handleServerMessageAudio(msg);
-          } catch (audioErr) {
-            reportPatientError("audio-schedule", audioErr);
-          }
-          return;
-        }
 
-        if (isBinaryWebSocketData(data)) {
-          var binaryTask;
-          if (data instanceof ArrayBuffer) {
-            binaryTask = playTtsFromArrayBuffer(data, "audio/mpeg");
-          } else {
-            binaryTask = data.arrayBuffer().then(function (buf) {
-              return playTtsFromArrayBuffer(buf, data.type || "audio/mpeg");
-            });
+          if (msg) {
+            if (isPatientSpeakingSignal(msg)) {
+              nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
+            }
+            try {
+              wsRouteJsonMessage(msg);
+            } catch (routeErr) {
+              console.error("[onWebSocketMessage] route", routeErr);
+              reportPatientError("WS-route", routeErr);
+            }
+            try {
+              wsHandleResultTts(msg);
+            } catch (ttsErr) {
+              console.error("[onWebSocketMessage] TTS", ttsErr);
+              reportPatientError("WS-TTS", ttsErr);
+            }
+            return;
           }
-          binaryTask.catch(function (err) {
-            reportPatientError("binary-TTS", err);
+
+          if (wsIsBinary(message)) {
+            try {
+              var binaryTask = wsHandleBinaryPayload(message);
+              if (binaryTask && typeof binaryTask.catch === "function") {
+                binaryTask.catch(function (binErr) {
+                  console.error("[onWebSocketMessage] binary play", binErr);
+                  reportPatientError("binary-TTS", binErr);
+                });
+              }
+            } catch (binWrapErr) {
+              console.error("[onWebSocketMessage] binary wrap", binWrapErr);
+              reportPatientError("binary-TTS", binWrapErr);
+            }
+            return;
+          }
+
+          reportPatientError("WS", new Error("알 수 없는 WebSocket 데이터 형식"));
+        } catch (fatalErr) {
+          console.error("[onWebSocketMessage] fatal", fatalErr);
+          reportPatientError("WS-fatal", fatalErr);
+        }
+      }
+
+      function scheduleWebSocketReconnect() {
+        if (!wsDesiredConnect) return;
+        if (wsReconnectTimer) return;
+        wsReconnectTimer = setTimeout(function () {
+          wsReconnectTimer = null;
+          if (!wsDesiredConnect) return;
+          connectWebSocket().catch(function (reErr) {
+            console.error("[scheduleWebSocketReconnect]", reErr);
           });
-          return;
+        }, WS_RECONNECT_MS);
+      }
+
+      function startWebSocket() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          return Promise.resolve(ws);
+        }
+        if (ws && ws.readyState === WebSocket.CONNECTING) {
+          return new Promise(function (resolve, reject) {
+            var waited = 0;
+            var tick = setInterval(function () {
+              waited += 100;
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                clearInterval(tick);
+                resolve(ws);
+              } else if (!ws || ws.readyState === WebSocket.CLOSED || waited > 8000) {
+                clearInterval(tick);
+                if (ws && ws.readyState === WebSocket.OPEN) resolve(ws);
+                else reject(new Error("WebSocket connect timeout"));
+              }
+            }, 100);
+          });
         }
 
-        reportPatientError("WS", new Error("알 수 없는 WebSocket 데이터 형식"));
+        if (ws) {
+          try {
+            ws.onopen = null;
+            ws.onmessage = null;
+            ws.onerror = null;
+            ws.onclose = null;
+            ws.close();
+          } catch (closeErr) {
+            console.error("[startWebSocket] close stale", closeErr);
+          }
+          ws = null;
+        }
+
+        return new Promise(function (resolve, reject) {
+          try {
+            setConnectionStatus("warn", "서버 연결 중…");
+            var socket = new WebSocket(WS_URL);
+            socket.binaryType = "arraybuffer";
+            ws = socket;
+
+            socket.onopen = function () {
+              try {
+                socket.send(JSON.stringify({ type: "register", role: "patient" }));
+                wsUpdateConnectionBadge();
+                resolve(socket);
+              } catch (openErr) {
+                console.error("[WebSocket.onopen]", openErr);
+                reject(openErr);
+              }
+            };
+
+            socket.onmessage = onWebSocketMessage;
+
+            socket.onerror = function () {
+              try {
+                setConnectionStatus("error", "연결 실패 · 1초 후 재시도");
+              } catch (badgeErr) {
+                console.error("[WebSocket.onerror]", badgeErr);
+              }
+            };
+
+            socket.onclose = function () {
+              try {
+                ws = null;
+                setConnectionStatus("warn", "연결 끊김 · 1초 후 재연결…");
+                scheduleWebSocketReconnect();
+              } catch (closeHandlerErr) {
+                console.error("[WebSocket.onclose]", closeHandlerErr);
+                scheduleWebSocketReconnect();
+              }
+            };
+          } catch (createErr) {
+            console.error("[startWebSocket] create", createErr);
+            scheduleWebSocketReconnect();
+            reject(createErr);
+          }
+        });
       }
 
       function connectWebSocket() {
-        if (ws && ws.readyState === WebSocket.OPEN) return Promise.resolve(ws);
-        if (wsConnectPromise) return wsConnectPromise;
-
-        wsConnectPromise = new Promise(function (resolve, reject) {
-          setConnectionStatus("warn", "서버 연결 중…");
-          var socket = new WebSocket(WS_URL);
-          socket.binaryType = "arraybuffer";
-
-          socket.onopen = function () {
-            ws = socket;
-            wsConnectPromise = null;
-            socket.send(JSON.stringify({ type: "register", role: "patient" }));
-            if (clinicAudioInitializedByUser) {
-              setConnectionStatus("ok", "🟢 진료실 연결 완료");
-            } else {
-              setConnectionStatus("warn", "서버 연결됨 · 스피커·마이크 연결 필요");
-            }
-            resolve(socket);
-          };
-
-          socket.onmessage = function (event) {
-            try {
-              dispatchWebSocketData(event.data);
-            } catch (fatalErr) {
-              reportPatientError("WS-fatal", fatalErr);
-            }
-          };
-
-          socket.onerror = function () {
-            setConnectionStatus("error", "연결 실패");
-            reject(new Error("WebSocket failed"));
-          };
-
-          socket.onclose = function () {
-            ws = null;
-            wsConnectPromise = null;
-            setConnectionStatus("warn", "연결 끊김");
-            setTimeout(function () {
-              connectWebSocket().catch(function () {});
-            }, 3000);
-          };
-        });
-
-        return wsConnectPromise;
+        wsDesiredConnect = true;
+        return startWebSocket();
       }
 
       var ACTION_DEBOUNCE_MS = 500;
@@ -1434,7 +1553,11 @@
       clinicAudioInitializedByUser = false;
       showAudioUnlockOverlay();
       setConnectionStatus("warn", "스피커·마이크 연결 필요");
-      connectWebSocket().catch(function () {});
+      wsDesiredConnect = true;
+      connectWebSocket().catch(function (bootErr) {
+        console.error("[patient boot WS]", bootErr);
+        scheduleWebSocketReconnect();
+      });
     })();
   </script>
 </body>
