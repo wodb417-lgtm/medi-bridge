@@ -133,6 +133,17 @@
         </div>
       </section>
     </main>
+
+    <footer class="patient-self-speak" id="patient-self-speak-bar" hidden>
+      <button type="button" id="btn-patient-self-speak" class="speak-btn speak-btn--patient" data-default-label="말하기 시작" data-recording-label="말하기 종료" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
+        </svg>
+        <span class="speak-btn__text">
+          <span class="speak-btn__label">말하기 시작</span>
+        </span>
+      </button>
+    </footer>
   </div>
 
   <script>
@@ -211,6 +222,22 @@
         isRecording = false;
         pendingReadyAfterTts = false;
 
+        if (isPatientDirectSpeaking || patientDirectRecorder) {
+          isPatientDirectSpeaking = false;
+          patientDirectChunks = [];
+          if (patientDirectRecorder && patientDirectRecorder.state !== "inactive") {
+            try {
+              patientDirectRecorder.stop();
+            } catch (e) { /* ignore */ }
+          }
+          patientDirectRecorder = null;
+          if (patientDirectStream) {
+            patientDirectStream.getTracks().forEach(function (t) { t.stop(); });
+            patientDirectStream = null;
+          }
+          setPatientSelfSpeakButton(false);
+        }
+
         hideProcessingOverlayOnly();
         hideRecordingPromptOnly();
 
@@ -243,6 +270,7 @@
         } else {
           setPatientUiState("unlock");
         }
+        updatePatientSelfSpeakAvailability();
       }
 
       function finalizeReadyAfterPlayback() {
@@ -282,7 +310,10 @@
           isRecording = true;
           hideProcessingOverlayOnly();
           hideRecordingPromptOnly();
-          setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+          if (!isPatientDirectSpeaking) {
+            setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+          }
+          updatePatientSelfSpeakAvailability();
           return;
         }
 
@@ -306,6 +337,7 @@
               : PATIENT_UI_HINTS.processing;
           setPatientUiState("processing", processingHint);
           if (languageLocked) setDetectedBadge("detecting", "처리 중…");
+          updatePatientSelfSpeakAvailability();
           return;
         }
 
@@ -318,6 +350,7 @@
             patientUniversalStage.classList.remove("is-live-status");
           }
           finalizeReadyAfterPlayback();
+          updatePatientSelfSpeakAvailability();
         }
       }
 
@@ -372,11 +405,18 @@
       var micStream = null;
       var micRecorder = null;
       var isRemoteRecording = false;
+      var isPatientDirectSpeaking = false;
+      var patientDirectChunks = [];
+      var patientDirectMime = "audio/webm";
+      var patientDirectRecorder = null;
+      var patientDirectStream = null;
       var isProcessing = false;
       var isRecording = false;
       var micReady = false;
       var ttsPlaybackActive = false;
       var pendingReadyAfterTts = false;
+      var btnPatientSelfSpeak = document.getElementById("btn-patient-self-speak");
+      var patientSelfSpeakBar = document.getElementById("patient-self-speak-bar");
 
       function blobToBase64(blob) {
         return new Promise(function (resolve, reject) {
@@ -425,8 +465,151 @@
         ws.send(JSON.stringify(payload));
       }
 
+      function sendPatientStateChange(state, speaker) {
+        var payload = { type: "state_change", state: state };
+        if (speaker) payload.speaker = speaker;
+        return connectWebSocket().then(function () {
+          sendPatientWs(payload);
+        });
+      }
+
+      function extensionForMime(mime) {
+        if (!mime) return "webm";
+        if (mime.indexOf("webm") >= 0) return "webm";
+        if (mime.indexOf("mp4") >= 0) return "mp4";
+        if (mime.indexOf("ogg") >= 0) return "ogg";
+        return "webm";
+      }
+
+      function submitPatientAudioViaForm(audioBlob) {
+        if (!audioBlob || audioBlob.size === 0) {
+          return Promise.reject(new Error("녹음된 오디오가 없습니다."));
+        }
+        var formData = new FormData();
+        var ext = extensionForMime(patientDirectMime);
+        formData.append("audio", audioBlob, "patient_audio." + ext);
+        formData.append("speaker", "patient");
+        return fetch("/api/transcribe", {
+          method: "POST",
+          body: formData,
+        }).then(function (res) {
+          if (!res.ok) {
+            return res.json().then(function (body) {
+              var detail = body && body.detail;
+              var msg =
+                typeof detail === "string"
+                  ? detail
+                  : Array.isArray(detail)
+                    ? detail.map(function (d) { return d.msg || d; }).join(", ")
+                    : res.statusText || "전송 실패";
+              throw new Error(msg);
+            }).catch(function (parseErr) {
+              if (parseErr.message && parseErr.message !== "Unexpected token") {
+                throw parseErr;
+              }
+              throw new Error(res.statusText || "전송 실패");
+            });
+          }
+          return res.json();
+        });
+      }
+
+      function setPatientSelfSpeakButton(recording) {
+        if (!btnPatientSelfSpeak) return;
+        btnPatientSelfSpeak.classList.toggle("is-recording", recording);
+        btnPatientSelfSpeak.setAttribute("aria-pressed", recording ? "true" : "false");
+        var labelEl = btnPatientSelfSpeak.querySelector(".speak-btn__label");
+        if (!labelEl) return;
+        labelEl.textContent = recording
+          ? btnPatientSelfSpeak.getAttribute("data-recording-label") || "말하기 종료"
+          : btnPatientSelfSpeak.getAttribute("data-default-label") || "말하기 시작";
+      }
+
+      function updatePatientSelfSpeakAvailability() {
+        if (!btnPatientSelfSpeak) return;
+        var blocked =
+          !clinicAudioInitializedByUser ||
+          isRemoteRecording ||
+          (isRecording && !isPatientDirectSpeaking) ||
+          isProcessing;
+        btnPatientSelfSpeak.disabled = blocked;
+      }
+
+      async function startPatientDirectSpeak() {
+        if (isPatientDirectSpeaking || isRemoteRecording || isProcessing) return;
+        if (!hasCompletedUnlockFlow()) {
+          showAudioUnlockOverlay();
+          return;
+        }
+        await connectWebSocket();
+        await sendPatientStateChange("patient_speaking", "patient");
+        patientDirectStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        var mimeType = getSupportedMimeType();
+        patientDirectMime = mimeType || "audio/webm";
+        patientDirectChunks = [];
+        var options = mimeType ? { mimeType: mimeType } : undefined;
+        patientDirectRecorder = new MediaRecorder(patientDirectStream, options);
+        patientDirectRecorder.ondataavailable = function (event) {
+          if (event.data && event.data.size > 0) {
+            patientDirectChunks.push(event.data);
+          }
+        };
+        patientDirectRecorder.start(250);
+        isPatientDirectSpeaking = true;
+        isRecording = true;
+        setPatientSelfSpeakButton(true);
+        updatePatientSelfSpeakAvailability();
+        setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+      }
+
+      function stopPatientDirectSpeak() {
+        if (!isPatientDirectSpeaking || !patientDirectRecorder) return;
+        isPatientDirectSpeaking = false;
+        isRecording = false;
+        setPatientSelfSpeakButton(false);
+        setPatientUiState("processing", PATIENT_UI_HINTS.processing_patient);
+        sendPatientStateChange("processing", "patient").catch(function () { /* ignore */ });
+        var recorder = patientDirectRecorder;
+        patientDirectRecorder = null;
+        recorder.onstop = function () {
+          if (patientDirectStream) {
+            patientDirectStream.getTracks().forEach(function (t) { t.stop(); });
+            patientDirectStream = null;
+          }
+          var blob = new Blob(patientDirectChunks, { type: patientDirectMime });
+          patientDirectChunks = [];
+          isProcessing = true;
+          updatePatientSelfSpeakAvailability();
+          submitPatientAudioViaForm(blob)
+            .then(function () {
+              isProcessing = false;
+            })
+            .catch(function (err) {
+              isProcessing = false;
+              resetPatientUI({
+                keepSubtitle: translationView.classList.contains("is-visible"),
+              });
+              reportPatientError("upload", err);
+            });
+        };
+        if (recorder.state !== "inactive") recorder.stop();
+      }
+
+      function togglePatientDirectSpeak() {
+        if (isPatientDirectSpeaking) {
+          stopPatientDirectSpeak();
+        } else {
+          startPatientDirectSpeak().catch(function (err) {
+            isPatientDirectSpeaking = false;
+            isRecording = false;
+            setPatientSelfSpeakButton(false);
+            reportPatientError("mic", err);
+          });
+        }
+      }
+
       async function startRemotePatientRecording() {
-        if (isRemoteRecording) return;
+        if (isRemoteRecording || isPatientDirectSpeaking) return;
         if (!hasCompletedUnlockFlow()) return;
         await connectWebSocket();
         await preparePatientMic();
@@ -876,6 +1059,10 @@
           localStorage.setItem(AUDIO_UNLOCK_KEY, "true");
         } catch (e) { /* ignore */ }
 
+        if (patientSelfSpeakBar) {
+          patientSelfSpeakBar.hidden = false;
+        }
+        updatePatientSelfSpeakAvailability();
         updateClinicConnectionUI(true);
       }
 
@@ -989,6 +1176,7 @@
         }
 
         if (msg.type === "remote_patient_record") {
+          if (isPatientDirectSpeaking) return;
           if (msg.phase === "start") {
             applyPatientStatusMessage({
               type: "status",
@@ -1123,7 +1311,7 @@
           socket.onopen = function () {
             ws = socket;
             wsConnectPromise = null;
-            socket.send(JSON.stringify({ type: "register", role: "display" }));
+            socket.send(JSON.stringify({ type: "register", role: "patient" }));
             if (clinicAudioInitializedByUser) {
               setConnectionStatus("ok", "🟢 진료실 연결 완료");
             } else {
@@ -1172,6 +1360,14 @@
       function bindPageEventsOnce() {
         if (pageEventsBound) return;
         pageEventsBound = true;
+
+        if (btnPatientSelfSpeak) {
+          btnPatientSelfSpeak.onclick = function (e) {
+            e.preventDefault();
+            if (!acceptActionDebounce("patientSelfSpeak")) return;
+            togglePatientDirectSpeak();
+          };
+        }
 
         if (!btnAudioUnlock) return;
         btnAudioUnlock.onclick = function (e) {

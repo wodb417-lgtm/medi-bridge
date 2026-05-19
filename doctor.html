@@ -167,6 +167,8 @@
       var isRecording = false;
       var isProcessing = false;
       var isPatientRecording = false;
+      /** 환자 태블릿에서 직접 말하기 시작 시 의사 버튼 미러링 */
+      var patientSpeakMirrored = false;
       var doctorRecordedChunks = [];
       var doctorRecordingMime = "audio/webm";
 
@@ -318,6 +320,27 @@
         panelsPatientRemote.setAttribute("aria-hidden", "true");
       }
 
+      function mirrorPatientDirectSpeak() {
+        if (isPatientRecording) return;
+        patientSpeakMirrored = true;
+        if (btnPatient) {
+          setPatientRecordingButton(btnPatient, true);
+        }
+        showPatientRemoteOverlay();
+        setDetectedBadge("detecting", "환자가 직접 말하는 중…");
+      }
+
+      function clearPatientSpeakMirror() {
+        if (!patientSpeakMirrored) return;
+        patientSpeakMirrored = false;
+        if (btnPatient && !isPatientRecording) {
+          setPatientRecordingButton(btnPatient, false);
+        }
+        if (!isPatientRecording) {
+          hidePatientRemoteOverlay();
+        }
+      }
+
       function setRecordingButton(btn, recording) {
         btn.classList.toggle("is-recording", recording);
         btn.setAttribute("aria-pressed", recording ? "true" : "false");
@@ -451,6 +474,7 @@
         var formData = new FormData();
         var ext = extensionForMime(doctorRecordingMime);
         formData.append("audio", audioBlob, "query_audio." + ext);
+        formData.append("speaker", "doctor");
         formData.append("target_lang", getPatientTargetLangCode());
         if (languageSelect.value) {
           formData.append("manual_lang", languageSelect.value);
@@ -606,7 +630,7 @@
 
       function togglePatientRemoteRecording(btn) {
         if (!acceptActionDebounce("patientToggle")) return;
-        if (isProcessing || isRecording) return;
+        if (isProcessing || isRecording || patientSpeakMirrored) return;
         if (!isPatientRecording) {
           startPatientRemoteRecording(btn);
         } else {
@@ -651,6 +675,7 @@
         if (msg.type === "reset") {
           isProcessing = false;
           isPatientRecording = false;
+          patientSpeakMirrored = false;
           activeSpeaker = null;
           activeButton = null;
           hidePatientRemoteOverlay();
@@ -661,10 +686,39 @@
         }
 
         if (msg.type === "status") {
+          if (msg.status === "patient_speaking" && msg.speaker === "patient") {
+            if (!isPatientRecording) {
+              mirrorPatientDirectSpeak();
+            }
+            return;
+          }
           if (msg.status === "ready") {
             isProcessing = false;
+            isPatientRecording = false;
+            patientSpeakMirrored = false;
+            activeSpeaker = null;
+            activeButton = null;
+            hidePatientRemoteOverlay();
+            if (btnPatient) setPatientRecordingButton(btnPatient, false);
             hideProcessingOverlay();
-          } else if (msg.status === "processing" && msg.speaker === "doctor") {
+            return;
+          }
+          if (msg.status === "processing" && msg.speaker === "patient") {
+            if (patientSpeakMirrored) {
+              clearPatientSpeakMirror();
+            } else if (isPatientRecording) {
+              isPatientRecording = false;
+              if (btnPatient) setPatientRecordingButton(btnPatient, false);
+              hidePatientRemoteOverlay();
+              activeSpeaker = null;
+              activeButton = null;
+            }
+            isProcessing = true;
+            showProcessingOverlay();
+            setDetectedBadge("detecting", "처리 중…");
+            return;
+          }
+          if (msg.status === "processing" && msg.speaker === "doctor") {
             isProcessing = true;
             hidePatientRemoteOverlay();
             showProcessingOverlay();
@@ -683,6 +737,7 @@
         if (msg.type === "error") {
           isProcessing = false;
           isPatientRecording = false;
+          patientSpeakMirrored = false;
           activeSpeaker = null;
           activeButton = null;
           hidePatientRemoteOverlay();
@@ -695,6 +750,7 @@
         if (msg.type === "result") {
           isProcessing = false;
           isPatientRecording = false;
+          patientSpeakMirrored = false;
           hidePatientRemoteOverlay();
           if (btnPatient) setPatientRecordingButton(btnPatient, false);
           hideProcessingOverlay();
@@ -716,7 +772,7 @@
 
       function beginDoctorSpeak(btn) {
         if (isProcessing) return;
-        if (isRecording || isPatientRecording) return;
+        if (isRecording || isPatientRecording || patientSpeakMirrored) return;
         startDoctorRecording(btn).catch(function (err) {
           isRecording = false;
           isProcessing = false;
@@ -736,7 +792,7 @@
 
       function toggleDoctorSpeak(btn) {
         if (!acceptActionDebounce("doctorShortcutToggle")) return;
-        if (isProcessing || isPatientRecording) return;
+        if (isProcessing || isPatientRecording || patientSpeakMirrored) return;
         if (isRecording && activeSpeaker === "doctor") {
           endDoctorSpeak();
         } else if (!isRecording) {

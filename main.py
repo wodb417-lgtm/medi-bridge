@@ -110,42 +110,68 @@ LANG_CODE_ALIASES: dict[str, str] = {
 
 
 class ConnectionManager:
-    """연결된 모든 클라이언트(의사·환자 화면)에 브로드캐스트."""
+    """의사·환자 WebSocket 세션을 분리 보관하고 HTTP 처리 후에도 유지."""
 
     def __init__(self) -> None:
-        self.connections: dict[WebSocket, str] = {}
+        self.doctor_sockets: dict[WebSocket, str] = {}
+        self.patient_sockets: dict[WebSocket, str] = {}
+
+    @property
+    def connections(self) -> dict[WebSocket, str]:
+        """레거시 호환: 전체 연결 맵."""
+        merged: dict[WebSocket, str] = {}
+        merged.update(self.doctor_sockets)
+        merged.update(self.patient_sockets)
+        return merged
 
     def register(self, websocket: WebSocket, role: str) -> None:
-        self.connections[websocket] = role
+        self.disconnect(websocket)
+        role_norm = (role or "display").strip().lower()
+        if role_norm == "doctor":
+            self.doctor_sockets[websocket] = role_norm
+        else:
+            self.patient_sockets[websocket] = role_norm
 
     def disconnect(self, websocket: WebSocket) -> None:
-        self.connections.pop(websocket, None)
+        self.doctor_sockets.pop(websocket, None)
+        self.patient_sockets.pop(websocket, None)
 
     def get_role(self, websocket: WebSocket) -> str:
-        return self.connections.get(websocket, "display")
+        if websocket in self.doctor_sockets:
+            return self.doctor_sockets[websocket]
+        if websocket in self.patient_sockets:
+            return self.patient_sockets[websocket]
+        return "display"
+
+    async def _send_many(self, sockets: list[WebSocket], message: dict) -> None:
+        dead: list[WebSocket] = []
+        for ws in sockets:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+    async def broadcast_all(self, message: dict) -> None:
+        await self._send_many(
+            list(self.doctor_sockets.keys()) + list(self.patient_sockets.keys()),
+            message,
+        )
 
     async def broadcast(self, message: dict) -> None:
-        dead: list[WebSocket] = []
-        for ws in list(self.connections.keys()):
-            try:
-                await ws.send_json(message)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(ws)
+        """번역 결과 등 — 의사·환자 모두 수신."""
+        await self.broadcast_all(message)
+
+    async def broadcast_doctors(self, message: dict) -> None:
+        await self._send_many(list(self.doctor_sockets.keys()), message)
+
+    async def broadcast_patients(self, message: dict) -> None:
+        await self._send_many(list(self.patient_sockets.keys()), message)
 
     async def send_to_displays(self, message: dict) -> None:
-        """환자 디스플레이(display) 연결에만 전송."""
-        dead: list[WebSocket] = []
-        for ws, role in list(self.connections.items()):
-            if role != "display":
-                continue
-            try:
-                await ws.send_json(message)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            self.disconnect(ws)
+        """환자 측 소켓에만 전송 (레거시 remote_patient_record)."""
+        await self.broadcast_patients(message)
 
 
 manager = ConnectionManager()
@@ -164,15 +190,25 @@ STATE_CHANGE_TO_DISPLAY: dict[str, tuple[str, str]] = {
 }
 
 
-async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> None:
-    """환자 디스플레이에만 UI 상태 패킷 전송."""
+async def broadcast_ui_status(status: str, *, speaker: str = "doctor") -> None:
+    """의사·환자 화면 모두에 동일 UI 상태 패킷 전송."""
     if status == "idle":
         status = "ready"
     if status not in PATIENT_UI_STATUSES:
         return
     payload = {"type": "status", "status": status, "speaker": speaker}
-    logger.info("broadcast_patient_status → displays: %s", payload)
-    await manager.send_to_displays(payload)
+    logger.info(
+        "broadcast_ui_status → doctors=%d patients=%d %s",
+        len(manager.doctor_sockets),
+        len(manager.patient_sockets),
+        payload,
+    )
+    await manager.broadcast_all(payload)
+
+
+async def broadcast_patient_status(status: str, *, speaker: str = "doctor") -> None:
+    """레거시 별칭 — 양쪽 동기화."""
+    await broadcast_ui_status(status, speaker=speaker)
 
 
 async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
@@ -186,12 +222,12 @@ async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
             audio_bytes=audio_bytes,
             speaker="patient",
         )
-        await manager.broadcast(result)
+        await manager.broadcast_all(result)
         await asyncio.sleep(0)
-        await broadcast_patient_status("ready", speaker="patient")
+        await broadcast_ui_status("ready", speaker="patient")
     except Exception as exc:
         logger.exception("patient audio pipeline failed")
-        await manager.broadcast(
+        await manager.broadcast_all(
             {
                 "type": "error",
                 "message": str(exc),
@@ -199,11 +235,11 @@ async def run_patient_audio_pipeline(audio_bytes: bytes) -> None:
             }
         )
         await asyncio.sleep(0)
-        await broadcast_patient_status("ready", speaker="patient")
+        await broadcast_ui_status("ready", speaker="patient")
 
 
-async def relay_doctor_state_change(msg: dict) -> None:
-    """의사 state_change를 환자 디스플레이 status 패킷으로 변환·전송."""
+async def relay_state_change(msg: dict) -> None:
+    """state_change → status 패킷으로 변환 후 의사·환자 양쪽에 브로드캐스트."""
     state = (msg.get("state") or "").strip()
     speaker_override = (msg.get("speaker") or "").strip()
     mapped = STATE_CHANGE_TO_DISPLAY.get(state)
@@ -211,10 +247,18 @@ async def relay_doctor_state_change(msg: dict) -> None:
         logger.warning("Unknown state_change state=%r", state)
         return
     status, default_speaker = mapped
-    speaker = speaker_override if speaker_override in ("doctor", "patient") else default_speaker
+    speaker = (
+        speaker_override
+        if speaker_override in ("doctor", "patient")
+        else default_speaker
+    )
     if state == "processing" and speaker_override == "patient":
         speaker = "patient"
-    await broadcast_patient_status(status, speaker=speaker)
+    await broadcast_ui_status(status, speaker=speaker)
+
+
+async def relay_doctor_state_change(msg: dict) -> None:
+    await relay_state_change(msg)
 
 
 # 진료 세션에 고정된 환자 타겟 언어 (환자 발화 시 Whisper 감지로 Lock-in)
@@ -809,18 +853,22 @@ async def api_transcribe(
     audio: UploadFile = File(...),
     target_lang: str = Form(""),
     manual_lang: str = Form(""),
+    speaker: str = Form("doctor"),
 ):
     """
-    의사 녹음: multipart/form-data로 오디오 파일과 메타데이터를 분리 수신.
-    WebSocket과 분리된 안전한 HTTP 파이프라인.
+    multipart/form-data 오디오 업로드 (의사·환자 공용).
+    WebSocket 세션은 ConnectionManager가 HTTP와 별도로 유지.
     """
     audio_bytes = await audio.read()
+    speaker_norm = "patient" if (speaker or "").strip().lower() == "patient" else "doctor"
 
     logger.info(
-        "POST /api/transcribe bytes=%d filename=%r content_type=%r",
+        "POST /api/transcribe speaker=%s bytes=%d filename=%r doctors=%d patients=%d",
+        speaker_norm,
         len(audio_bytes),
         audio.filename,
-        audio.content_type,
+        len(manager.doctor_sockets),
+        len(manager.patient_sockets),
     )
 
     if not audio_bytes:
@@ -830,25 +878,25 @@ async def api_transcribe(
     target = (target_lang or "").strip()
     target_override = manual if manual else (target if target else None)
 
-    await broadcast_patient_status("processing", speaker="doctor")
+    await broadcast_ui_status("processing", speaker=speaker_norm)
     try:
         result = await process_audio_session(
             audio_bytes=audio_bytes,
-            speaker="doctor",
+            speaker=speaker_norm,
             target_lang=target_override,
             upload_filename=audio.filename,
         )
-        await manager.broadcast(result)
+        await manager.broadcast_all(result)
         await asyncio.sleep(0)
-        await broadcast_patient_status("ready", speaker="doctor")
+        await broadcast_ui_status("ready", speaker=speaker_norm)
         return result
     except Exception as exc:
         logger.exception("api/transcribe failed")
-        await manager.broadcast(
-            {"type": "error", "message": str(exc), "speaker": "doctor"}
+        await manager.broadcast_all(
+            {"type": "error", "message": str(exc), "speaker": speaker_norm}
         )
         await asyncio.sleep(0)
-        await broadcast_patient_status("ready", speaker="doctor")
+        await broadcast_ui_status("ready", speaker=speaker_norm)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -858,6 +906,8 @@ async def health():
         "status": "ok",
         "openai_configured": bool(os.environ.get("OPENAI_API_KEY")),
         "connections": len(manager.connections),
+        "doctor_connections": len(manager.doctor_sockets),
+        "patient_connections": len(manager.patient_sockets),
         "session_lang": current_session_lang,
         "language_locked": current_session_lang is not None,
     }
@@ -972,7 +1022,7 @@ async def _dispatch_websocket_message(
         return
 
     if msg_type == "patient_audio":
-        if manager.get_role(websocket) != "display":
+        if manager.get_role(websocket) not in ("display", "patient"):
             return
         phase = msg.get("phase")
         if phase == "chunk":
@@ -1002,28 +1052,32 @@ async def _dispatch_websocket_message(
         return
 
     if msg_type == "state_change":
-        if manager.get_role(websocket) != "doctor":
+        role = manager.get_role(websocket)
+        if role not in ("doctor", "display", "patient"):
             return
-        await relay_doctor_state_change(msg)
+        await relay_state_change(msg)
         state_val = (msg.get("state") or "").strip()
-        if state_val == "patient_speaking":
+        if role == "doctor" and state_val == "patient_speaking":
             patient_remote_chunks.clear()
-            await manager.send_to_displays(
+            await manager.broadcast_patients(
                 {"type": "remote_patient_record", "phase": "start"}
             )
-        elif state_val == "processing" and msg.get("speaker") == "patient":
-            await manager.send_to_displays(
+        elif (
+            role == "doctor"
+            and state_val == "processing"
+            and msg.get("speaker") == "patient"
+        ):
+            await manager.broadcast_patients(
                 {"type": "remote_patient_record", "phase": "stop"}
             )
         return
 
     if msg_type == "status":
-        if manager.get_role(websocket) != "doctor":
-            return
         status = msg.get("status")
-        if status in PATIENT_UI_STATUSES:
-            await broadcast_patient_status(
-                status, speaker=msg.get("speaker", "doctor")
+        if status in PATIENT_UI_STATUSES or status == "idle":
+            await broadcast_ui_status(
+                "ready" if status == "idle" else status,
+                speaker=msg.get("speaker", "doctor"),
             )
         return
 

@@ -268,3 +268,35 @@ body.patient-display .audio-unlock-overlay__title {
   color: var(--mb-navy);
   margin-bottom: 0.75rem;
 }
+
+/* 환자 직접 말하기 — 카드 하단 고정 */
+body.patient-display .patient-self-speak {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0.75rem 1rem 1rem;
+  background: var(--mb-white);
+  border-top: 1px solid rgba(0, 40, 85, 0.08);
+}
+
+body.patient-display .patient-self-speak .speak-btn {
+  width: min(100%, 22rem);
+  min-height: 3.25rem;
+}
+
+body.patient-display .patient-self-speak .speak-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+body.patient-display .app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+body.patient-display .app > main {
+  flex: 1;
+  min-height: 0;
+}
