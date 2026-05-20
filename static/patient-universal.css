@@ -6,6 +6,10 @@
 body.patient-display .display-stage {
   background: var(--mb-white);
   position: relative;
+  /* 플로팅 말하기 버튼이 자막·대기 화면을 가리지 않도록 */
+  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
+  min-height: 100%;
 }
 
 /* WebSocket status 강제 오버레이 — JS가 style.display로 제어 */
@@ -282,8 +286,9 @@ body.patient-display .translation-view .panel-header--compact {
 
 body.patient-display .subtitle-stage {
   flex: 1;
-  padding: 2.5rem 2rem 3rem;
+  padding: 2.5rem 2rem calc(3rem + env(safe-area-inset-bottom, 0px));
   justify-content: center;
+  box-sizing: border-box;
 }
 
 body.patient-display .subtitle-body {
@@ -327,34 +332,83 @@ body.patient-display .audio-unlock-overlay__title {
   margin-bottom: 0.75rem;
 }
 
-/* 환자 직접 말하기 — 카드 하단 고정 */
+/* 환자 직접 말하기 — 화면 하단 플로팅 (모바일·태블릿 safe-area 대응) */
 body.patient-display .patient-self-speak {
-  flex-shrink: 0;
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  width: 90%;
+  max-width: 400px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-sizing: border-box;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 0.75rem 1rem 1rem;
-  background: var(--mb-white);
-  border-top: 1px solid rgba(0, 40, 85, 0.08);
+  pointer-events: none;
+}
+
+body.patient-display .patient-self-speak[hidden] {
+  display: none !important;
 }
 
 body.patient-display .patient-self-speak .speak-btn {
-  width: min(100%, 22rem);
-  min-height: 3.25rem;
+  width: 100%;
+  min-height: 56px;
+  padding: 0.9rem 1.25rem;
+  pointer-events: auto;
+  border-radius: 14px;
+  box-shadow: 0 4px 22px rgba(0, 40, 85, 0.16), 0 1px 4px rgba(0, 40, 85, 0.08);
+  background: var(--mb-white);
+  color: var(--mb-navy);
+  border: 1px solid var(--mb-navy);
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+body.patient-display .patient-self-speak .speak-btn:hover,
+body.patient-display .patient-self-speak .speak-btn:active {
+  background: var(--mb-surface, #f4f7fb);
+  box-shadow: 0 6px 24px rgba(0, 40, 85, 0.2);
+}
+
+body.patient-display .patient-self-speak .speak-btn.is-recording {
+  background: var(--mb-navy);
+  color: var(--mb-white);
+  border-color: var(--mb-navy);
+  box-shadow: 0 4px 22px rgba(0, 40, 85, 0.28);
 }
 
 body.patient-display .patient-self-speak .speak-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
+}
+
+body.patient-display .patient-self-speak .speak-btn__label {
+  font-size: clamp(1rem, 3.5vw, 1.125rem);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+body.patient-display .welcome-screen {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 body.patient-display .app {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  min-height: 100vh;
 }
 
 body.patient-display .app > main {
   flex: 1;
   min-height: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }

@@ -1,8 +1,10 @@
 import asyncio
 import base64
 import binascii
+import io
 import json
 import logging
+import mimetypes
 import os
 import tempfile
 from pathlib import Path
@@ -471,9 +473,89 @@ WHISPER_UPLOAD_MIME: dict[str, str] = {
     ".mpga": "audio/mpeg",
     ".mp4": "audio/mp4",
     ".m4a": "audio/mp4",
+    ".oga": "audio/ogg",
     ".ogg": "audio/ogg",
     ".flac": "audio/flac",
 }
+
+# OpenAI Whisper API가 파일명 확장자로 포맷을 판별함 — 튜플 첫 인자에 반드시 포함
+WHISPER_SUPPORTED_EXTS = frozenset(WHISPER_UPLOAD_MIME.keys())
+
+CONTENT_TYPE_TO_WHISPER: dict[str, tuple[str, str]] = {
+    "audio/webm": ("audio.webm", "audio/webm"),
+    "audio/wav": ("audio.wav", "audio/wav"),
+    "audio/x-wav": ("audio.wav", "audio/wav"),
+    "audio/mpeg": ("audio.mp3", "audio/mpeg"),
+    "audio/mp3": ("audio.mp3", "audio/mpeg"),
+    "audio/mp4": ("audio.m4a", "audio/mp4"),
+    "audio/x-m4a": ("audio.m4a", "audio/mp4"),
+    "audio/m4a": ("audio.m4a", "audio/mp4"),
+    "audio/ogg": ("audio.ogg", "audio/ogg"),
+    "audio/flac": ("audio.flac", "audio/flac"),
+}
+
+
+def sniff_audio_whisper_filename_mime(audio_bytes: bytes) -> tuple[str, str]:
+    """매직 바이트로 Whisper 업로드용 (파일명, MIME) 결정 — Safari/iPad mp4 대응."""
+    if len(audio_bytes) < 12:
+        return "audio.webm", "audio/webm"
+
+    if audio_bytes[:4] == b"\x1a\x45\xdf\xa3":
+        return "audio.webm", "audio/webm"
+    if audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+        return "audio.wav", "audio/wav"
+    if audio_bytes[:4] == b"OggS":
+        return "audio.ogg", "audio/ogg"
+    if audio_bytes[:4] == b"fLaC":
+        return "audio.flac", "audio/flac"
+    if audio_bytes[:3] == b"ID3" or (
+        audio_bytes[0] == 0xFF and len(audio_bytes) > 1 and (audio_bytes[1] & 0xE0) == 0xE0
+    ):
+        return "audio.mp3", "audio/mpeg"
+    if audio_bytes[4:8] == b"ftyp":
+        brand = audio_bytes[8:12]
+        if brand in (b"M4A ", b"mp42", b"isom", b"M4B ", b"qt  "):
+            return "audio.m4a", "audio/mp4"
+        return "audio.mp4", "audio/mp4"
+
+    return "audio.webm", "audio/webm"
+
+
+def resolve_whisper_upload_filename_mime(
+    audio_bytes: bytes,
+    upload_filename: str | None = None,
+    content_type: str | None = None,
+) -> tuple[str, str]:
+    """업로드 파일명·Content-Type·매직 바이트 순으로 Whisper file 튜플 메타 결정."""
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct in CONTENT_TYPE_TO_WHISPER:
+        return CONTENT_TYPE_TO_WHISPER[ct]
+
+    if upload_filename:
+        base = os.path.basename(upload_filename)
+        ext = os.path.splitext(base)[1].lower()
+        if ext in WHISPER_SUPPORTED_EXTS:
+            return base if base else f"audio{ext}", WHISPER_UPLOAD_MIME[ext]
+        guessed, _ = mimetypes.guess_type(base)
+        if guessed and guessed in CONTENT_TYPE_TO_WHISPER:
+            return CONTENT_TYPE_TO_WHISPER[guessed]
+
+    return sniff_audio_whisper_filename_mime(audio_bytes)
+
+
+def whisper_file_tuple_from_bytes(
+    audio_bytes: bytes,
+    upload_filename: str | None = None,
+    content_type: str | None = None,
+) -> tuple[str, io.BytesIO, str]:
+    """OpenAI transcriptions.create file= (name, stream, mime) — 확장자 포함 파일명 보장."""
+    upload_name, upload_mime = resolve_whisper_upload_filename_mime(
+        audio_bytes, upload_filename, content_type
+    )
+    if not os.path.splitext(upload_name)[1]:
+        upload_name = "audio.webm"
+        upload_mime = "audio/webm"
+    return upload_name, io.BytesIO(audio_bytes), upload_mime
 
 
 def decode_audio_chunk_b64(data_b64: str) -> bytes:
@@ -494,23 +576,14 @@ def assemble_doctor_audio(chunks: list[bytes]) -> bytes:
     return b"".join(chunks)
 
 
-def whisper_upload_file(file_path: str) -> tuple[str, object, str]:
-    """OpenAI Whisper file= 튜플 (파일명, 바이너리 스트림, MIME) — Invalid file format 방지."""
-    ext = os.path.splitext(file_path)[1].lower()
-    if ext not in WHISPER_UPLOAD_MIME:
-        ext = ".webm"
-    upload_name = f"recording{ext}"
-    upload_mime = WHISPER_UPLOAD_MIME[ext]
-    audio_file = open(file_path, "rb")
-    return upload_name, audio_file, upload_mime
-
-
-def transcribe_audio(
-    file_path: str,
+def transcribe_audio_bytes(
+    audio_bytes: bytes,
     language_hint: str | None = None,
     *,
     auto_detect_only: bool = False,
     whisper_prompt: str | None = None,
+    upload_filename: str | None = None,
+    content_type: str | None = None,
 ) -> tuple[str, str]:
     kwargs: dict = {
         "model": "whisper-1",
@@ -531,20 +604,23 @@ def transcribe_audio(
     if whisper_prompt:
         logger.info("Whisper context prompt applied (len=%d)", len(whisper_prompt))
 
-    upload_name, audio_file, upload_mime = whisper_upload_file(file_path)
+    upload_name, audio_buf, upload_mime = whisper_file_tuple_from_bytes(
+        audio_bytes, upload_filename, content_type
+    )
     try:
         logger.info(
-            "Whisper upload file=%s mime=%s size=%s bytes",
+            "Whisper upload file=%r mime=%s size=%d bytes (orig_filename=%r)",
             upload_name,
             upload_mime,
-            os.path.getsize(file_path),
+            len(audio_bytes),
+            upload_filename,
         )
         transcript = client.audio.transcriptions.create(
-            file=(upload_name, audio_file, upload_mime),
+            file=(upload_name, audio_buf, upload_mime),
             **kwargs,
         )
     finally:
-        audio_file.close()
+        audio_buf.close()
 
     text = (transcript.text or "").strip()
     raw_detected = getattr(transcript, "language", None)
@@ -554,6 +630,25 @@ def transcribe_audio(
     if not detected and not auto_detect_only:
         detected = DEFAULT_DOCTOR_TARGET_LANG
     return text, detected
+
+
+def transcribe_audio(
+    file_path: str,
+    language_hint: str | None = None,
+    *,
+    auto_detect_only: bool = False,
+    whisper_prompt: str | None = None,
+) -> tuple[str, str]:
+    """디스크 경로 — 바이트로 읽어 확장자 보장 튜플로 Whisper 호출."""
+    with open(file_path, "rb") as f:
+        audio_bytes = f.read()
+    return transcribe_audio_bytes(
+        audio_bytes,
+        language_hint,
+        auto_detect_only=auto_detect_only,
+        whisper_prompt=whisper_prompt,
+        upload_filename=os.path.basename(file_path),
+    )
 
 
 def resolve_patient_target_lang() -> str:
@@ -698,6 +793,7 @@ async def process_audio_session(
     *,
     target_lang: str | None = None,
     upload_filename: str | None = None,
+    content_type: str | None = None,
 ) -> dict:
     global current_session_lang
 
@@ -710,132 +806,131 @@ async def process_audio_session(
     if not os.environ.get("OPENAI_API_KEY"):
         raise ValueError("OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.")
 
-    suffix = ".webm"
-    if upload_filename:
-        ext = os.path.splitext(upload_filename)[1].lower()
-        if ext in WHISPER_UPLOAD_MIME:
-            suffix = ext
+    whisper_name, _ = resolve_whisper_upload_filename_mime(
+        audio_bytes, upload_filename, content_type
+    )
+    logger.info(
+        "process_audio_session speaker=%s whisper_upload_name=%r bytes=%d",
+        speaker,
+        whisper_name,
+        len(audio_bytes),
+    )
 
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            suffix=suffix, prefix="medibridge_", delete=False
-        ) as tmp:
-            tmp.write(audio_bytes)
-            tmp.flush()
-            tmp_path = tmp.name
+    if speaker == "doctor":
+        logger.info("Doctor Whisper prompt=universal clinic")
+        original, detected_source = await asyncio.to_thread(
+            transcribe_audio_bytes,
+            audio_bytes,
+            None,
+            auto_detect_only=True,
+            whisper_prompt=WHISPER_DOCTOR_PROMPT,
+            upload_filename=upload_filename,
+            content_type=content_type,
+        )
+    else:
+        original, detected_source = await asyncio.to_thread(
+            transcribe_audio_bytes,
+            audio_bytes,
+            None,
+            auto_detect_only=True,
+            upload_filename=upload_filename,
+            content_type=content_type,
+        )
+        detected_norm = normalize_lang_code(detected_source) if detected_source else ""
+        logger.info(
+            "Patient speech: Whisper auto-detect → language=%r text_len=%d",
+            detected_norm or "(unknown)",
+            len(original),
+        )
 
-        if speaker == "doctor":
-            logger.info("Doctor Whisper prompt=universal clinic")
-            original, detected_source = await asyncio.to_thread(
-                transcribe_audio,
-                tmp_path,
-                None,
-                auto_detect_only=True,
-                whisper_prompt=WHISPER_DOCTOR_PROMPT,
+        if detected_norm == "ko":
+            logger.info("Patient ko detection — running false-positive filter")
+            original = await asyncio.to_thread(
+                reconcile_patient_korean_false_positive, original
             )
-        else:
-            original, detected_source = await asyncio.to_thread(
-                transcribe_audio, tmp_path, None, auto_detect_only=True
-            )
-            detected_norm = normalize_lang_code(detected_source) if detected_source else ""
-            logger.info(
-                "Patient speech: Whisper auto-detect → language=%r text_len=%d",
-                detected_norm or "(unknown)",
-                len(original),
-            )
-
-            if detected_norm == "ko":
-                logger.info("Patient ko detection — running false-positive filter")
-                original = await asyncio.to_thread(
-                    reconcile_patient_korean_false_positive, original
-                )
-                if not original:
-                    raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
-                display_lang = current_session_lang or DEFAULT_DOCTOR_TARGET_LANG
-                return build_ui_payload(
-                    {
-                        "type": "result",
-                        "speaker": "patient",
-                        "original": original,
-                        "translated": original,
-                        "detected_language": display_lang,
-                        "detected_language_label_ko": (
-                            label_ko_for_code(display_lang)
-                            if current_session_lang
-                            else "자동 감지 (한국어 오인식 보정)"
-                        ),
-                        "source_language": "ko",
-                        "session_lang": current_session_lang,
-                        "language_locked": current_session_lang is not None,
-                    }
-                )
-
-        if not original:
-            raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
-
-        if speaker == "doctor":
-            dest_lang = resolve_patient_target_lang()
-            logger.info(
-                "Doctor speech: whisper_source=%s → translate target=%s (override=%r)",
-                detected_source,
-                dest_lang,
-                target_lang,
-            )
-            translated = await asyncio.to_thread(
-                translate_text,
-                original,
-                detected_source,
-                dest_lang,
-            )
-            payload = build_ui_payload(
+            if not original:
+                raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
+            display_lang = current_session_lang or DEFAULT_DOCTOR_TARGET_LANG
+            return build_ui_payload(
                 {
                     "type": "result",
-                    "speaker": "doctor",
+                    "speaker": "patient",
                     "original": original,
-                    "translated": translated,
-                    "detected_language": dest_lang,
-                    "detected_language_label_ko": label_ko_for_code(dest_lang),
-                    "source_language": detected_source,
-                    "session_lang": dest_lang,
+                    "translated": original,
+                    "detected_language": display_lang,
+                    "detected_language_label_ko": (
+                        label_ko_for_code(display_lang)
+                        if current_session_lang
+                        else "자동 감지 (한국어 오인식 보정)"
+                    ),
+                    "source_language": "ko",
+                    "session_lang": current_session_lang,
                     "language_locked": current_session_lang is not None,
                 }
             )
-            patient_line = payload.get("patient_text", "")
-            tts_b64 = await asyncio.to_thread(
-                synthesize_patient_tts,
-                patient_line,
-                dest_lang,
-                voice=TTS_VOICE_DEFAULT,
-            )
-            if tts_b64:
-                # WebSocket JSON: MP3 bytes as ASCII Base64 (not URL, not raw binary frame)
-                payload["tts_format"] = "base64"
-                payload["tts_audio_b64"] = tts_b64
-                payload["tts_mime"] = "audio/mpeg"
-            return payload
 
-        # 환자 발화: Whisper 감지 언어로 세션 Lock-in → 한국어 번역
-        locked_lang = lock_session_language(detected_source)
-        translated = await asyncio.to_thread(
-            translate_text, original, locked_lang, "ko"
+    if not original:
+        raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
+
+    if speaker == "doctor":
+        dest_lang = resolve_patient_target_lang()
+        logger.info(
+            "Doctor speech: whisper_source=%s → translate target=%s (override=%r)",
+            detected_source,
+            dest_lang,
+            target_lang,
         )
-        return build_ui_payload(
+        translated = await asyncio.to_thread(
+            translate_text,
+            original,
+            detected_source,
+            dest_lang,
+        )
+        payload = build_ui_payload(
             {
                 "type": "result",
-                "speaker": "patient",
+                "speaker": "doctor",
                 "original": original,
                 "translated": translated,
-                "detected_language": locked_lang,
-                "detected_language_label_ko": label_ko_for_code(locked_lang),
-                "source_language": locked_lang,
-                "session_lang": locked_lang,
-                "language_locked": True,
+                "detected_language": dest_lang,
+                "detected_language_label_ko": label_ko_for_code(dest_lang),
+                "source_language": detected_source,
+                "session_lang": dest_lang,
+                "language_locked": current_session_lang is not None,
             }
         )
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        patient_line = payload.get("patient_text", "")
+        tts_b64 = await asyncio.to_thread(
+            synthesize_patient_tts,
+            patient_line,
+            dest_lang,
+            voice=TTS_VOICE_DEFAULT,
+        )
+        if tts_b64:
+            # WebSocket JSON: MP3 bytes as ASCII Base64 (not URL, not raw binary frame)
+            payload["tts_format"] = "base64"
+            payload["tts_audio_b64"] = tts_b64
+            payload["tts_mime"] = "audio/mpeg"
+        return payload
+
+    # 환자 발화: Whisper 감지 언어로 세션 Lock-in → 한국어 번역
+    locked_lang = lock_session_language(detected_source)
+    translated = await asyncio.to_thread(
+        translate_text, original, locked_lang, "ko"
+    )
+    return build_ui_payload(
+        {
+            "type": "result",
+            "speaker": "patient",
+            "original": original,
+            "translated": translated,
+            "detected_language": locked_lang,
+            "detected_language_label_ko": label_ko_for_code(locked_lang),
+            "source_language": locked_lang,
+            "session_lang": locked_lang,
+            "language_locked": True,
+        }
+    )
 
 
 @app.get("/")
@@ -896,6 +991,7 @@ async def api_transcribe(
             speaker=speaker_norm,
             target_lang=target_override,
             upload_filename=audio.filename,
+            content_type=audio.content_type,
         )
         await manager.broadcast_all(result)
         await asyncio.sleep(0)

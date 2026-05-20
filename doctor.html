@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
   <script src="/static/medibridge-ws.js"></script>
+  <script src="/static/featureScript.js"></script>
+  <script src="/static/index.js"></script>
 </head>
 <body class="doctor-master medibridge-ui">
   <div class="app">
@@ -875,10 +877,24 @@
       }
 
       function updateShortcutUI() {
-        if (doctorShortcutHint) {
+        var ShortcutBtn =
+          (window.MediBridgeShortcut && window.MediBridgeShortcut.ShortcutButton) ||
+          (window.ShortcutButton && window.ShortcutButton.init ? window.ShortcutButton : null);
+
+        if (ShortcutBtn && ShortcutBtn.init) {
+          if (btnDoctor && shortcuts.doctor) {
+            ShortcutBtn.init(btnDoctor, shortcuts.doctor.label, { className: "shortcut-hint" });
+          }
+          if (btnPatient && shortcuts.patient) {
+            ShortcutBtn.init(btnPatient, shortcuts.patient.label, { className: "shortcut-hint" });
+          }
+          return;
+        }
+
+        if (doctorShortcutHint && shortcuts.doctor) {
           doctorShortcutHint.textContent = formatShortcutBadge(shortcuts.doctor.label);
         }
-        if (patientShortcutHint) {
+        if (patientShortcutHint && shortcuts.patient) {
           patientShortcutHint.textContent = formatShortcutBadge(shortcuts.patient.label);
         }
       }
