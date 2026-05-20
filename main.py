@@ -285,8 +285,11 @@ DEFAULT_DOCTOR_TARGET_LANG = "en"
 TTS_VOICE_DEFAULT = "nova"
 TTS_VOICE_ALT = "onyx"
 
-# 번역·문맥 교정용 채팅 모델 (지연 시간 최적화)
+# 번역·문맥 교정용 채팅 모델 (지연 시간 최적화 — gpt-4o-mini)
 GPT_CHAT_MODEL = "gpt-4o-mini"
+
+# TTS — 속도 우선 (tts-1-hd 사용 금지)
+TTS_MODEL = "tts-1"
 
 # Whisper: 범용 의원 진료실 (의사 발화 STT)
 WHISPER_DOCTOR_PROMPT = (
@@ -756,7 +759,7 @@ def synthesize_patient_tts(
 
     voice = voice or pick_tts_voice(lang_code)
     response = client.audio.speech.create(
-        model="tts-1",
+        model=TTS_MODEL,
         voice=voice,
         input=cleaned,
         response_format="mp3",
@@ -785,6 +788,41 @@ def build_ui_payload(result: dict) -> dict:
         "doctor_text": doctor_text,
         "patient_text": patient_text,
     }
+
+
+async def broadcast_doctor_tts_followup(result: dict) -> None:
+    """번역 텍스트 브로드캐스트 후 백그라운드 TTS — 환자는 자막을 먼저 읽음."""
+    try:
+        if result.get("speaker") != "doctor":
+            return
+        patient_line = (result.get("patient_text") or "").strip()
+        if not patient_line:
+            return
+        dest_lang = (
+            result.get("detected_language")
+            or result.get("session_lang")
+            or resolve_patient_target_lang()
+        )
+        tts_b64 = await asyncio.to_thread(
+            synthesize_patient_tts,
+            patient_line,
+            dest_lang,
+            voice=TTS_VOICE_DEFAULT,
+        )
+        if not tts_b64:
+            return
+        await manager.broadcast_all(
+            {
+                "type": "tts",
+                "speaker": "doctor",
+                "tts_format": "base64",
+                "tts_audio_b64": tts_b64,
+                "tts_mime": "audio/mpeg",
+            }
+        )
+        logger.info("Background TTS delivered speaker=doctor chars=%d", len(patient_line))
+    except Exception:
+        logger.exception("broadcast_doctor_tts_followup failed")
 
 
 async def process_audio_session(
@@ -897,20 +935,9 @@ async def process_audio_session(
                 "source_language": detected_source,
                 "session_lang": dest_lang,
                 "language_locked": current_session_lang is not None,
+                "tts_pending": True,
             }
         )
-        patient_line = payload.get("patient_text", "")
-        tts_b64 = await asyncio.to_thread(
-            synthesize_patient_tts,
-            patient_line,
-            dest_lang,
-            voice=TTS_VOICE_DEFAULT,
-        )
-        if tts_b64:
-            # WebSocket JSON: MP3 bytes as ASCII Base64 (not URL, not raw binary frame)
-            payload["tts_format"] = "base64"
-            payload["tts_audio_b64"] = tts_b64
-            payload["tts_mime"] = "audio/mpeg"
         return payload
 
     # 환자 발화: Whisper 감지 언어로 세션 Lock-in → 한국어 번역
@@ -996,6 +1023,15 @@ async def api_transcribe(
         await manager.broadcast_all(result)
         await asyncio.sleep(0)
         await broadcast_universal_ready()
+        if (
+            speaker_norm == "doctor"
+            and result.get("type") == "result"
+            and result.get("tts_pending")
+        ):
+            asyncio.create_task(
+                broadcast_doctor_tts_followup(result),
+                name="doctor_tts_followup",
+            )
         return result
     except Exception as exc:
         logger.exception("api/transcribe failed")

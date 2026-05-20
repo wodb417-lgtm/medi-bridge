@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/patient-universal.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="/static/medibridge-ws.js"></script>
+  <script src="/static/clinic-audio.js"></script>
 </head>
 <body class="patient-display medibridge-ui">
   <div class="app">
@@ -639,6 +640,9 @@
       }
 
       function getSupportedMimeType() {
+        if (window.MediBridgeClinicAudio && MediBridgeClinicAudio.getSupportedClinicMimeType) {
+          return MediBridgeClinicAudio.getSupportedClinicMimeType();
+        }
         var types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
         for (var i = 0; i < types.length; i++) {
           if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
@@ -646,9 +650,28 @@
         return "";
       }
 
+      function getClinicMicConstraints() {
+        if (window.MediBridgeClinicAudio && MediBridgeClinicAudio.getClinicAudioConstraints) {
+          return MediBridgeClinicAudio.getClinicAudioConstraints();
+        }
+        return { audio: { channelCount: 1, sampleRate: { ideal: 16000 } } };
+      }
+
+      function createClinicMediaRecorder(stream, mimeType) {
+        if (window.MediBridgeClinicAudio && MediBridgeClinicAudio.createMediaRecorder) {
+          return MediBridgeClinicAudio.createMediaRecorder(stream, mimeType);
+        }
+        var options = mimeType ? { mimeType: mimeType, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 };
+        try {
+          return new MediaRecorder(stream, options);
+        } catch (e) {
+          return mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+        }
+      }
+
       function preparePatientMic() {
         if (micStream && micReady) return Promise.resolve(micStream);
-        return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+        return navigator.mediaDevices.getUserMedia(getClinicMicConstraints()).then(function (stream) {
           micStream = stream;
           micReady = true;
           return stream;
@@ -791,11 +814,10 @@
         try {
           await connectWebSocket();
           await sendPatientStateChange("patient_speaking", "patient");
-          patientMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          patientMicStream = await navigator.mediaDevices.getUserMedia(getClinicMicConstraints());
           var mimeType = getSupportedMimeType();
           patientRecordingMime = mimeType || "audio/webm";
-          var options = mimeType ? { mimeType: mimeType } : undefined;
-          mediaRecorder = new MediaRecorder(patientMicStream, options);
+          mediaRecorder = createClinicMediaRecorder(patientMicStream, mimeType || undefined);
 
           mediaRecorder.ondataavailable = function (event) {
             if (event.data && event.data.size > 0) {
@@ -860,8 +882,7 @@
         await connectWebSocket();
         await preparePatientMic();
         var mimeType = getSupportedMimeType();
-        var options = mimeType ? { mimeType: mimeType } : undefined;
-        micRecorder = new MediaRecorder(micStream, options);
+        micRecorder = createClinicMediaRecorder(micStream, mimeType || undefined);
         micRecorder.ondataavailable = function (event) {
           if (!event.data || event.data.size === 0) return;
           sendPatientAudioChunk(event.data).catch(function (err) {
@@ -1293,7 +1314,7 @@
 
         await unlockSpeakerInUserGesture();
 
-        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        var stream = await navigator.mediaDevices.getUserMedia(getClinicMicConstraints());
         if (micStream) {
           micStream.getTracks().forEach(function (t) {
             t.stop();
@@ -1424,7 +1445,12 @@
 
       function wsHandleResultTts(msg) {
         try {
-          if (!msg || msg.type !== "result" || msg.speaker !== "doctor") return;
+          if (!msg) return;
+          if (msg.type === "tts" && msg.speaker === "doctor") {
+            scheduleTtsFromMessage(msg);
+            return;
+          }
+          if (msg.type !== "result" || msg.speaker !== "doctor") return;
           if (
             msg.tts_audio_b64 ||
             msg.tts_audio_url ||

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
   <script src="/static/medibridge-ws.js"></script>
+  <script src="/static/clinic-audio.js"></script>
   <script src="/static/featureScript.js"></script>
   <script src="/static/index.js"></script>
 </head>
@@ -507,11 +508,33 @@
       }
 
       function getSupportedMimeType() {
+        if (window.MediBridgeClinicAudio && MediBridgeClinicAudio.getSupportedClinicMimeType) {
+          return MediBridgeClinicAudio.getSupportedClinicMimeType();
+        }
         var types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
         for (var i = 0; i < types.length; i++) {
           if (MediaRecorder.isTypeSupported(types[i])) return types[i];
         }
         return "";
+      }
+
+      function getClinicMicConstraints() {
+        if (window.MediBridgeClinicAudio && MediBridgeClinicAudio.getClinicAudioConstraints) {
+          return MediBridgeClinicAudio.getClinicAudioConstraints();
+        }
+        return { audio: { channelCount: 1, sampleRate: { ideal: 16000 } } };
+      }
+
+      function createClinicMediaRecorder(stream, mimeType) {
+        if (window.MediBridgeClinicAudio && MediBridgeClinicAudio.createMediaRecorder) {
+          return MediBridgeClinicAudio.createMediaRecorder(stream, mimeType);
+        }
+        var options = mimeType ? { mimeType: mimeType, audioBitsPerSecond: 24000 } : { audioBitsPerSecond: 24000 };
+        try {
+          return new MediaRecorder(stream, options);
+        } catch (e) {
+          return mimeType ? new MediaRecorder(stream, { mimeType: mimeType }) : new MediaRecorder(stream);
+        }
       }
 
       function sendWs(payload) {
@@ -541,12 +564,11 @@
         activeSpeaker = "doctor";
         activeButton = btn;
 
-        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStream = await navigator.mediaDevices.getUserMedia(getClinicMicConstraints());
         var mimeType = getSupportedMimeType();
         doctorRecordingMime = mimeType || "audio/webm";
         doctorRecordedChunks = [];
-        var options = mimeType ? { mimeType: mimeType } : undefined;
-        mediaRecorder = new MediaRecorder(audioStream, options);
+        mediaRecorder = createClinicMediaRecorder(audioStream, mimeType || undefined);
 
         mediaRecorder.ondataavailable = function (event) {
           if (!event.data || event.data.size === 0) return;
