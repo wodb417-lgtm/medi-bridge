@@ -322,10 +322,37 @@
         el.classList.toggle("is-empty", !text);
       }
 
+      var DOSE_HIGHLIGHT_STYLE =
+        "color: #e74c3c; font-weight: bold; background-color: #fee2e2; padding: 0 4px; border-radius: 4px;";
+      var DOSE_HIGHLIGHT_RE =
+        /(\d+(?:\.\d+)?(?:일분|일치|주일|개월|시간|분|회|정|알|캡슐|포|통|mg|mL|ml|년|일|주|번|시)?|\d+(?:\.\d+)?|(?:일분|일치|주일|개월|시간|캡슐|mg|mL|ml|회|정|알|포|통))/gi;
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function highlightPrescriptionDoses(text) {
+        var escaped = escapeHtml(text);
+        return escaped.replace(DOSE_HIGHLIGHT_RE, function (match) {
+          return (
+            '<span style="' +
+            DOSE_HIGHLIGHT_STYLE +
+            '">' +
+            match +
+            "</span>"
+          );
+        });
+      }
+
       function clearSmartChartSummary() {
         latestSummaryText = "";
         if (smartChartContent) {
           smartChartContent.textContent = "";
+          smartChartContent.innerHTML = "";
           smartChartContent.hidden = true;
         }
         if (smartChartPlaceholder) {
@@ -347,7 +374,7 @@
           return;
         }
         if (smartChartContent) {
-          smartChartContent.textContent = latestSummaryText;
+          smartChartContent.innerHTML = highlightPrescriptionDoses(latestSummaryText);
           smartChartContent.hidden = false;
         }
         if (smartChartPlaceholder) {

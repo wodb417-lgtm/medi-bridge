@@ -293,6 +293,8 @@ TTS_MODEL = "tts-1"
 
 # Whisper: 범용 의원 진료실 (의사 발화 STT)
 WHISPER_DOCTOR_PROMPT = (
+    "병원 진료 대화입니다. 약은 3일분 처방해 드릴 테니 하루 세 번 식후 30분에 드세요. "
+    "처방 기간·복용 횟수·용법이 포함된 문장처럼, 숫자와 단위가 어울리는 맥락으로 자연스럽게 받아적어 주세요. "
     "이 음성은 한국의 일반 의원(내과, 정형외과, 이비인후과 등) 진료실에서 의사와 외국인 환자가 나누는 대화입니다. "
     "의사 선생님이 환자의 통증이나 다양한 질환 증상을 묻고 진찰하며, 약 처방 및 향후 주의사항을 정중하게 안내하는 상황입니다. "
     "경상도 사투리나 흘리는 발음, 일상적인 의학 용어가 있더라도 전체 맥락을 파악하여 표준어로 자연스럽고 정확하게 받아적어 주세요."
@@ -304,7 +306,9 @@ CLINICAL_SUMMARY_SYSTEM_PROMPT = """너는 전문 의료 보조 AI(Medical Scrib
 2. [상세 병력 (HPI)]: 발생 시기, 통증 양상, 동반 증상 (예: 3일 전 발생, 쑤시는 통증, 소화불량 동반)
 3. [처치 및 계획 (Plan)]: 의사가 환자에게 설명한 약 처방이나 검사, 행동 지침 (예: 진통제 3일 처방, 무리한 운동 금지)
 
-응답은 마크다운을 사용하지 말고, 가독성이 좋은 일반 텍스트 기호(-, *)를 사용해서 반환해 줘."""
+응답은 마크다운을 사용하지 말고, 가독성이 좋은 일반 텍스트 기호(-, *)를 사용해서 반환해 줘.
+
+STT 과정에서 '30분 처방'처럼 의학적으로 말이 안 되는 오인식이 발생할 수 있어. 전체 맥락을 파악해서 논리적으로 말이 되는 수치(예: 3일분 처방)로 똑똑하게 보정해서 요약해 줘."""
 
 MEDICAL_INTERPRETER_SYSTEM_PROMPT = """You are an intelligent medical AI assistant in a Korean hospital outpatient clinic.
 You specialize in interpreting a doctor's spoken Korean (via speech-to-text) into the patient's language with clinical accuracy and safety.
@@ -767,7 +771,10 @@ async def run_clinical_summary_pipeline(
         )
 
 
-def translate_text(
+SENTENCE_TERMINATORS = frozenset(".?!。．？！\n")
+
+
+def build_translate_user_content(
     text: str,
     source_lang: str,
     target_lang: str,
@@ -775,11 +782,10 @@ def translate_text(
     source = LANG_NAMES.get(normalize_lang_code(source_lang), source_lang)
     target = LANG_NAMES.get(normalize_lang_code(target_lang), target_lang)
     source_code = normalize_lang_code(source_lang)
-    target_code = normalize_lang_code(target_lang)
 
     if source_code == "ko":
-        user_content = (
-            f"Translate the following doctor utterance (Korean STT transcript) into {target} ({target_code}).\n\n"
+        return (
+            f"Translate the following doctor utterance (Korean STT transcript) into {target} ({normalize_lang_code(target_lang)}).\n\n"
             "Apply the system prompt [Translation tone & manner] strictly: polite, clear everyday medical language; "
             "no infantile tone; preserve the doctor's professional weight.\n\n"
             "Follow the system prompt pipeline strictly:\n"
@@ -799,23 +805,81 @@ def translate_text(
             "Output ONLY the final translation.\n\n"
             f"Doctor speech transcript (Korean, may contain STT errors and dialect):\n{text}"
         )
-    else:
-        user_content = (
-            f"Translate the following medical text into {target} ({target_code}).\n"
-            "Use polite, clear clinical phrasing (not infantile or overly casual).\n"
-            "Output ONLY the translation — no labels or explanations.\n\n"
-            f"Medical text ({source}):\n{text}"
-        )
+    return (
+        f"Translate the following medical text into {target} ({normalize_lang_code(target_lang)}).\n"
+        "Use polite, clear clinical phrasing (not infantile or overly casual).\n"
+        "Output ONLY the translation — no labels or explanations.\n\n"
+        f"Medical text ({source}):\n{text}"
+    )
 
-    response = client.chat.completions.create(
+
+def pop_complete_sentence(buffer: str) -> tuple[str | None, str]:
+    """스트리밍 버퍼에서 완성된 첫 문장을 분리."""
+    if not buffer:
+        return None, buffer
+    end_idx = -1
+    for i, ch in enumerate(buffer):
+        if ch in SENTENCE_TERMINATORS:
+            end_idx = i
+            break
+    if end_idx < 0:
+        return None, buffer
+    sentence = buffer[: end_idx + 1].strip()
+    remainder = buffer[end_idx + 1 :].lstrip()
+    if not sentence:
+        return None, buffer
+    return sentence, remainder
+
+
+def translate_text_stream_sync(
+    text: str,
+    source_lang: str,
+    target_lang: str,
+    on_sentence,
+) -> str:
+    """GPT stream=True 번역 + 문장 단위 콜백 (동기, 스레드에서 실행)."""
+    user_content = build_translate_user_content(text, source_lang, target_lang)
+    stream = client.chat.completions.create(
         model=GPT_CHAT_MODEL,
         messages=[
             {"role": "system", "content": MEDICAL_INTERPRETER_SYSTEM_PROMPT},
             {"role": "user", "content": user_content},
         ],
         temperature=0.2,
+        stream=True,
     )
-    return (response.choices[0].message.content or "").strip()
+    buffer = ""
+    parts: list[str] = []
+    for event in stream:
+        if not event.choices:
+            continue
+        delta = event.choices[0].delta.content or ""
+        if not delta:
+            continue
+        parts.append(delta)
+        buffer += delta
+        while True:
+            sentence, buffer = pop_complete_sentence(buffer)
+            if not sentence:
+                break
+            on_sentence(sentence)
+    tail = buffer.strip()
+    if tail:
+        on_sentence(tail)
+    return "".join(parts).strip()
+
+
+def translate_text(
+    text: str,
+    source_lang: str,
+    target_lang: str,
+) -> str:
+    collected: list[str] = []
+
+    def _collect(sentence: str) -> None:
+        collected.append(sentence)
+
+    return translate_text_stream_sync(text, source_lang, target_lang, _collect)
 
 
 def pick_tts_voice(lang_code: str) -> str:
@@ -870,39 +934,100 @@ def build_ui_payload(result: dict) -> dict:
     }
 
 
-async def broadcast_doctor_tts_followup(result: dict) -> None:
-    """번역 텍스트 브로드캐스트 후 백그라운드 TTS — 환자는 자막을 먼저 읽음."""
+async def broadcast_audio_chunk(
+    sentence: str,
+    lang_code: str,
+    *,
+    speaker: str = "doctor",
+    chunk_index: int,
+) -> None:
+    """문장 단위 TTS → WebSocket audio_chunk."""
+    cleaned = (sentence or "").strip()
+    if not cleaned:
+        return
     try:
-        if result.get("speaker") != "doctor":
-            return
-        patient_line = (result.get("patient_text") or "").strip()
-        if not patient_line:
-            return
-        dest_lang = (
-            result.get("detected_language")
-            or result.get("session_lang")
-            or resolve_patient_target_lang()
-        )
         tts_b64 = await asyncio.to_thread(
             synthesize_patient_tts,
-            patient_line,
-            dest_lang,
+            cleaned,
+            lang_code,
             voice=TTS_VOICE_DEFAULT,
         )
         if not tts_b64:
             return
         await manager.broadcast_all(
             {
-                "type": "tts",
-                "speaker": "doctor",
-                "tts_format": "base64",
-                "tts_audio_b64": tts_b64,
+                "type": "audio_chunk",
+                "speaker": speaker,
+                "audio": tts_b64,
                 "tts_mime": "audio/mpeg",
+                "chunk_index": chunk_index,
             }
         )
-        logger.info("Background TTS delivered speaker=doctor chars=%d", len(patient_line))
+        logger.info(
+            "audio_chunk speaker=%s index=%d chars=%d",
+            speaker,
+            chunk_index,
+            len(cleaned),
+        )
     except Exception:
-        logger.exception("broadcast_doctor_tts_followup failed")
+        logger.exception(
+            "broadcast_audio_chunk failed index=%d sentence=%r",
+            chunk_index,
+            cleaned[:48],
+        )
+
+
+async def stream_translate_with_chunked_tts(
+    text: str,
+    source_lang: str,
+    target_lang: str,
+    *,
+    dest_lang: str | None = None,
+) -> str:
+    """
+    GPT 번역 스트리밍 + 문장 경계마다 TTS를 병렬 생성해 audio_chunk 전송.
+    전체 번역문은 반환(결과 브로드캐스트용).
+    """
+    loop = asyncio.get_running_loop()
+    sentence_queue: asyncio.Queue[str | None] = asyncio.Queue()
+    tts_lang = dest_lang or target_lang
+    pending_tts: list[asyncio.Task] = []
+    chunk_index = 0
+
+    def on_sentence(sentence: str) -> None:
+        fut = asyncio.run_coroutine_threadsafe(sentence_queue.put(sentence), loop)
+        fut.result(timeout=60)
+
+    async def tts_dispatcher() -> None:
+        nonlocal chunk_index
+        while True:
+            sentence = await sentence_queue.get()
+            if sentence is None:
+                break
+            idx = chunk_index
+            chunk_index += 1
+            task = asyncio.create_task(
+                broadcast_audio_chunk(sentence, tts_lang, chunk_index=idx),
+                name=f"tts_chunk_{idx}",
+            )
+            pending_tts.append(task)
+
+    await manager.broadcast_all({"type": "tts_stream_start", "speaker": "doctor"})
+    dispatcher = asyncio.create_task(tts_dispatcher())
+    try:
+        full = await asyncio.to_thread(
+            translate_text_stream_sync,
+            text,
+            source_lang,
+            target_lang,
+            on_sentence,
+        )
+    finally:
+        await sentence_queue.put(None)
+        await dispatcher
+        if pending_tts:
+            await asyncio.gather(*pending_tts, return_exceptions=True)
+    return full
 
 
 async def process_audio_session(
@@ -998,11 +1123,11 @@ async def process_audio_session(
             dest_lang,
             target_lang,
         )
-        translated = await asyncio.to_thread(
-            translate_text,
+        translated = await stream_translate_with_chunked_tts(
             original,
             detected_source,
             dest_lang,
+            dest_lang=dest_lang,
         )
         payload = build_ui_payload(
             {
@@ -1015,7 +1140,6 @@ async def process_audio_session(
                 "source_language": detected_source,
                 "session_lang": dest_lang,
                 "language_locked": current_session_lang is not None,
-                "tts_pending": True,
             }
         )
         return payload
@@ -1103,15 +1227,6 @@ async def api_transcribe(
         await manager.broadcast_all(result)
         await asyncio.sleep(0)
         await broadcast_universal_ready()
-        if (
-            speaker_norm == "doctor"
-            and result.get("type") == "result"
-            and result.get("tts_pending")
-        ):
-            asyncio.create_task(
-                broadcast_doctor_tts_followup(result),
-                name="doctor_tts_followup",
-            )
         return result
     except Exception as exc:
         logger.exception("api/transcribe failed")
