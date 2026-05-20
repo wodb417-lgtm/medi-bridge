@@ -121,15 +121,74 @@ body.doctor-master .header__actions {
   filter: none;
 }
 
-/* 하단 컨트롤 패널 — 새 진료 시작 */
-.master-controls__reset {
+/* 하단 컨트롤 패널 — 요약 · 새 진료 시작 */
+.master-controls__actions {
   width: 100%;
   max-width: 680px;
   display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   justify-content: center;
+  gap: 1rem;
   margin: 1.25rem 0 0;
   padding-top: 0.25rem;
+}
+
+.summary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  flex: 1 1 240px;
+  min-width: 240px;
+  max-width: 420px;
+  min-height: 56px;
+  padding: 1rem 1.75rem;
+  background: var(--mb-white);
+  color: var(--mb-navy);
+  border: 2px solid var(--mb-navy);
+  border-radius: var(--radius-btn, 12px);
+  font-size: 1.0625rem;
+  font-weight: 700;
   font-family: inherit;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    opacity 0.2s ease;
+  box-shadow: 0 1px 4px rgba(0, 40, 85, 0.08);
+}
+
+.summary-btn i.fas {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.summary-btn:hover:not(:disabled),
+.summary-btn:focus-visible:not(:disabled) {
+  background: var(--mb-surface, #f4f7fb);
+  border-color: var(--mb-accent);
+  color: var(--mb-navy);
+  box-shadow: 0 4px 16px rgba(0, 40, 85, 0.12);
+}
+
+.summary-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.summary-btn:focus-visible {
+  outline: 2px solid rgba(0, 40, 85, 0.35);
+  outline-offset: 3px;
+}
+
+.master-controls__actions .reset-btn--ghost {
+  flex: 1 1 240px;
+  margin: 0;
+  max-width: 420px;
 }
 
 .reset-btn--ghost {

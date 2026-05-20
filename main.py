@@ -298,6 +298,14 @@ WHISPER_DOCTOR_PROMPT = (
     "경상도 사투리나 흘리는 발음, 일상적인 의학 용어가 있더라도 전체 맥락을 파악하여 표준어로 자연스럽고 정확하게 받아적어 주세요."
 )
 
+CLINICAL_SUMMARY_SYSTEM_PROMPT = """너는 전문 의료 보조 AI(Medical Scribe)야. 의사와 환자의 대화를 분석하여, 바쁜 의사가 1초 만에 읽고 차트에 적을 수 있도록 아래 3가지 항목의 '개조식(Bullet-point)' 텍스트로 요약해 줘. 절대 길게 줄글로 쓰지 말고 핵심 단어 위주로 작성해.
+
+1. [주증상 (CC)]: 환자가 온 가장 큰 이유 (예: 우측 슬관절 통증)
+2. [상세 병력 (HPI)]: 발생 시기, 통증 양상, 동반 증상 (예: 3일 전 발생, 쑤시는 통증, 소화불량 동반)
+3. [처치 및 계획 (Plan)]: 의사가 환자에게 설명한 약 처방이나 검사, 행동 지침 (예: 진통제 3일 처방, 무리한 운동 금지)
+
+응답은 마크다운을 사용하지 말고, 가독성이 좋은 일반 텍스트 기호(-, *)를 사용해서 반환해 줘."""
+
 MEDICAL_INTERPRETER_SYSTEM_PROMPT = """You are an intelligent medical AI assistant in a Korean hospital outpatient clinic.
 You specialize in interpreting a doctor's spoken Korean (via speech-to-text) into the patient's language with clinical accuracy and safety.
 
@@ -685,6 +693,78 @@ def reconcile_patient_korean_false_positive(whisper_text: str) -> str:
         temperature=0.2,
     )
     return (response.choices[0].message.content or "").strip()
+
+
+def format_history_for_summary(history: list) -> str:
+    """프론트 conversationHistory → GPT용 대화 텍스트."""
+    lines: list[str] = []
+    for idx, entry in enumerate(history, start=1):
+        if not isinstance(entry, dict):
+            continue
+        speaker = (entry.get("speaker") or entry.get("role") or "unknown").strip()
+        doctor_line = (
+            entry.get("doctor_text") or entry.get("doctor_ko") or ""
+        ).strip()
+        patient_line = (
+            entry.get("patient_text") or entry.get("patient_lang") or ""
+        ).strip()
+        if not doctor_line and not patient_line:
+            continue
+        lines.append(
+            f"[턴 {idx}] 발화자: {speaker}\n"
+            f"  · 의사(한국어): {doctor_line}\n"
+            f"  · 환자(번역): {patient_line}"
+        )
+    return "\n\n".join(lines) if lines else ""
+
+
+def generate_clinical_summary(history: list) -> str:
+    """진료 대화 기록 → 차트용 한국어 개조식 요약."""
+    transcript = format_history_for_summary(history)
+    if not transcript.strip():
+        raise ValueError("요약할 대화 기록이 없습니다.")
+
+    response = client.chat.completions.create(
+        model=GPT_CHAT_MODEL,
+        messages=[
+            {"role": "system", "content": CLINICAL_SUMMARY_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    "다음은 의사와 환자의 통역 대화 기록입니다. "
+                    "위 System Prompt 형식으로 요약해 주세요.\n\n"
+                    f"{transcript}"
+                ),
+            },
+        ],
+        temperature=0.2,
+    )
+    summary = (response.choices[0].message.content or "").strip()
+    if not summary:
+        raise ValueError("요약 생성에 실패했습니다.")
+    return summary
+
+
+async def run_clinical_summary_pipeline(
+    websocket: WebSocket,
+    history: list,
+) -> None:
+    """request_summary 처리 — WebSocket 루프를 막지 않도록 백그라운드 실행."""
+    try:
+        summary_text = await asyncio.to_thread(generate_clinical_summary, history)
+        await websocket.send_json(
+            {"type": "summary_result", "text": summary_text}
+        )
+        logger.info("summary_result sent chars=%d", len(summary_text))
+    except Exception as exc:
+        logger.exception("clinical summary pipeline failed")
+        await websocket.send_json(
+            {
+                "type": "summary_result",
+                "text": "",
+                "error": str(exc),
+            }
+        )
 
 
 def translate_text(
@@ -1250,6 +1330,18 @@ async def _dispatch_websocket_message(
                 }
             )
             await broadcast_patient_status("ready", speaker="doctor")
+        return
+
+    if msg_type == "request_summary":
+        if manager.get_role(websocket) != "doctor":
+            return
+        history = msg.get("history")
+        if not isinstance(history, list):
+            history = []
+        asyncio.create_task(
+            run_clinical_summary_pipeline(websocket, history),
+            name="clinical_summary_pipeline",
+        )
         return
 
     if msg_type == "ping":
