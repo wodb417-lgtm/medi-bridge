@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="/static/medibridge-ws.js"></script>
   <script src="/static/clinic-audio.js"></script>
   <script src="/static/featureScript.js"></script>
@@ -28,7 +29,6 @@
             <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
           </svg>
         </button>
-        <button type="button" id="btn-reset" class="reset-btn reset-btn--large">진료 종료 (초기화)</button>
         <div id="connection-status" class="status-badge status-badge--warn">
           <span class="status-dot" aria-hidden="true"></span>
           <span id="connection-status-text">서버 연결 중…</span>
@@ -115,6 +115,10 @@
           </span>
         </button>
       </div>
+      <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost master-controls__reset" aria-label="새 진료 시작 — 기록 초기화">
+        <i class="fas fa-redo-alt" aria-hidden="true"></i>
+        <span>새 진료 시작</span>
+      </button>
     </footer>
 
     <div id="settings-modal" class="settings-modal" aria-hidden="true" role="dialog" aria-labelledby="settings-modal-title">
@@ -1026,6 +1030,7 @@
         };
 
         btnReset.onclick = function () {
+          if (!confirm("현재 진료 기록을 초기화하시겠습니까?")) return;
           connectWebSocket().then(function () {
             sendWs({ type: "reset" });
           }).catch(function () {

@@ -121,6 +121,64 @@ body.doctor-master .header__actions {
   filter: none;
 }
 
+/* 하단 컨트롤 패널 — 새 진료 시작 (고스트) */
+.master-controls__reset {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  font-family: inherit;
+}
+
+.reset-btn--ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  min-width: 200px;
+  max-width: 320px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0.75rem 1.75rem;
+  background: transparent;
+  color: #c0392b;
+  border: 1.5px solid #c0392b;
+  border-radius: var(--radius-btn, 12px);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition:
+    background-color 0.22s ease,
+    color 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+  box-shadow: none;
+}
+
+.reset-btn--ghost i.fas {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.reset-btn--ghost:hover,
+.reset-btn--ghost:focus-visible {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-color: #e74c3c;
+  color: #e74c3c;
+  box-shadow: 0 2px 12px rgba(231, 76, 60, 0.12);
+}
+
+.reset-btn--ghost:active {
+  background-color: rgba(231, 76, 60, 0.16);
+}
+
+.reset-btn--ghost:focus-visible {
+  outline: 2px solid rgba(231, 76, 60, 0.35);
+  outline-offset: 2px;
+}
+
 .status-badge {
   border-radius: 4px;
   font-size: 0.6875rem;
@@ -301,9 +359,13 @@ body.doctor-master .header__actions {
 
 /* ─── Footer controls: flat ─── */
 .master-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.875rem;
   background: var(--mb-white);
   border-top: 1px solid var(--mb-border);
-  padding: 0.75rem 1.25rem 1rem;
+  padding: 0.75rem 1.25rem 1.125rem;
 }
 
 .speak-btn {
