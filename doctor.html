@@ -40,6 +40,8 @@
       마이크를 연결하고 권한을 허용해 주세요
     </div>
 
+    <div class="doctor-workspace">
+      <div class="doctor-workspace__main">
     <div class="lang-bar">
       <span class="lang-bar__label">수동 언어 설정</span>
       <span class="lang-bar__hint">선택 즉시 환자 언어가 고정됩니다 (자동 감지 전에도 사용 가능)</span>
@@ -126,6 +128,24 @@
         </button>
       </div>
     </footer>
+      </div>
+
+      <aside class="smart-chart-panel" aria-label="AI 진료 브리핑">
+        <div class="smart-chart-card">
+          <div class="smart-chart-card__header">
+            <h2 class="smart-chart-card__title">📋 AI 진료 브리핑</h2>
+            <button type="button" id="btn-chart-copy" class="smart-chart-copy-btn" disabled aria-label="브리핑 텍스트 복사" title="클립보드에 복사">
+              <i class="fas fa-copy" aria-hidden="true"></i>
+              <span>복사</span>
+            </button>
+          </div>
+          <div id="smart-chart-body" class="smart-chart-body is-placeholder">
+            <p id="smart-chart-placeholder" class="smart-chart-placeholder">대화 내용이 이곳에 요약됩니다.</p>
+            <div id="smart-chart-content" class="smart-chart-content" hidden></div>
+          </div>
+        </div>
+      </aside>
+    </div>
 
     <div id="settings-modal" class="settings-modal" aria-hidden="true" role="dialog" aria-labelledby="settings-modal-title">
       <div class="settings-modal__backdrop" data-close-modal></div>
@@ -158,6 +178,12 @@
       var btnPatient = document.getElementById("btn-patient");
       var btnReset = document.getElementById("btn-reset");
       var btnSummary = document.getElementById("btn-summary");
+      var btnChartCopy = document.getElementById("btn-chart-copy");
+      var smartChartBody = document.getElementById("smart-chart-body");
+      var smartChartPlaceholder = document.getElementById("smart-chart-placeholder");
+      var smartChartContent = document.getElementById("smart-chart-content");
+      var latestSummaryText = "";
+      var SMART_CHART_PLACEHOLDER = "대화 내용이 이곳에 요약됩니다.";
       var conversationHistory = [];
       var isSummaryInProgress = false;
       var SUMMARY_BTN_DEFAULT = "📝 진료 요약 및 복사";
@@ -296,8 +322,86 @@
         el.classList.toggle("is-empty", !text);
       }
 
+      function clearSmartChartSummary() {
+        latestSummaryText = "";
+        if (smartChartContent) {
+          smartChartContent.textContent = "";
+          smartChartContent.hidden = true;
+        }
+        if (smartChartPlaceholder) {
+          smartChartPlaceholder.textContent = SMART_CHART_PLACEHOLDER;
+          smartChartPlaceholder.hidden = false;
+        }
+        if (smartChartBody) {
+          smartChartBody.classList.add("is-placeholder");
+        }
+        if (btnChartCopy) {
+          btnChartCopy.disabled = true;
+        }
+      }
+
+      function setSmartChartSummary(text) {
+        latestSummaryText = (text || "").trim();
+        if (!latestSummaryText) {
+          clearSmartChartSummary();
+          return;
+        }
+        if (smartChartContent) {
+          smartChartContent.textContent = latestSummaryText;
+          smartChartContent.hidden = false;
+        }
+        if (smartChartPlaceholder) {
+          smartChartPlaceholder.hidden = true;
+        }
+        if (smartChartBody) {
+          smartChartBody.classList.remove("is-placeholder");
+        }
+        if (btnChartCopy) {
+          btnChartCopy.disabled = false;
+        }
+        if (smartChartBody) {
+          smartChartBody.scrollTop = 0;
+        }
+      }
+
+      function setSmartChartLoading(loading) {
+        if (!smartChartPlaceholder || !smartChartContent) return;
+        if (loading) {
+          if (smartChartBody) {
+            smartChartBody.classList.add("is-placeholder");
+          }
+          smartChartContent.hidden = true;
+          smartChartPlaceholder.hidden = false;
+          smartChartPlaceholder.textContent = "요약을 생성하고 있습니다…";
+          return;
+        }
+        if (!latestSummaryText.trim()) {
+          smartChartPlaceholder.textContent = SMART_CHART_PLACEHOLDER;
+          smartChartPlaceholder.hidden = false;
+          smartChartContent.hidden = true;
+          if (smartChartBody) {
+            smartChartBody.classList.add("is-placeholder");
+          }
+        }
+      }
+
+      function copySmartChartToClipboard() {
+        if (!latestSummaryText.trim()) {
+          alert("복사할 요약 내용이 없습니다.");
+          return;
+        }
+        copySummaryToClipboard(latestSummaryText)
+          .then(function () {
+            alert("차트 요약본이 클립보드에 복사되었습니다. (Ctrl+V로 붙여넣기)");
+          })
+          .catch(function (err) {
+            alert("클립보드 복사에 실패했습니다: " + (err.message || String(err)));
+          });
+      }
+
       function clearAllTexts() {
         conversationHistory = [];
+        clearSmartChartSummary();
         setText(doctorText, "");
         setText(patientText, "");
         doctorText.textContent = "번역된 내용이 여기에 표시됩니다";
@@ -338,6 +442,7 @@
 
       function setSummaryButtonLoading(loading) {
         isSummaryInProgress = loading;
+        setSmartChartLoading(loading);
         if (!btnSummary) return;
         btnSummary.disabled = loading;
         var labelEl = btnSummary.querySelector(".summary-btn__label");
@@ -378,13 +483,7 @@
           alert(msg && msg.error ? msg.error : "요약 결과가 비어 있습니다.");
           return;
         }
-        copySummaryToClipboard(text)
-          .then(function () {
-            alert("차트 요약본이 클립보드에 복사되었습니다. (Ctrl+V로 붙여넣기)");
-          })
-          .catch(function (err) {
-            alert("클립보드 복사에 실패했습니다: " + (err.message || String(err)));
-          });
+        setSmartChartSummary(text);
       }
 
       function showMicAlert() {
@@ -1132,6 +1231,12 @@
         if (btnSummary) {
           btnSummary.onclick = function () {
             requestClinicalSummary();
+          };
+        }
+
+        if (btnChartCopy) {
+          btnChartCopy.onclick = function () {
+            copySmartChartToClipboard();
           };
         }
 
