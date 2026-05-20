@@ -40,8 +40,20 @@
       마이크를 연결하고 권한을 허용해 주세요
     </div>
 
-    <div class="doctor-workspace">
+    <div id="doctor-workspace" class="doctor-workspace">
       <div class="doctor-workspace__main">
+      <div id="panels-patient-remote" class="doctor-patient-remote-overlay doctor-main-overlay" aria-hidden="true">
+        <div class="doctor-patient-remote-overlay__content">
+          <span class="doctor-patient-remote-overlay__text">환자 태블릿 녹음 중</span>
+          <span class="doctor-patient-remote-overlay__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+      </div>
+      <div id="panels-processing" class="processing-overlay doctor-main-overlay" aria-hidden="true">
+        <div class="processing-overlay__content">
+          <span class="processing-overlay__text">번역 중</span>
+          <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        </div>
+      </div>
     <div class="lang-bar">
       <span class="lang-bar__label">수동 언어 설정</span>
       <span class="lang-bar__hint">선택 즉시 환자 언어가 고정됩니다 (자동 감지 전에도 사용 가능)</span>
@@ -50,52 +62,57 @@
       </select>
     </div>
 
-    <main class="panels-processing-wrap">
-      <div id="panels-patient-remote" class="doctor-patient-remote-overlay" aria-hidden="true">
-        <div class="doctor-patient-remote-overlay__content">
-          <span class="doctor-patient-remote-overlay__text">환자 태블릿 녹음 중</span>
-          <span class="doctor-patient-remote-overlay__dots" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-      </div>
-      <div id="panels-processing" class="processing-overlay" aria-hidden="true">
-        <div class="processing-overlay__content">
-          <span class="processing-overlay__text">번역 중</span>
-          <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-        </div>
-      </div>
-      <div class="panels">
-      <section class="panel panel--doctor" aria-label="의사 한국어">
-        <div class="panel-header">
-          <h2 class="panel-title">한국어 · 의사</h2>
-          <p class="panel-subtitle">진료실 대화의 한국어 기록</p>
-        </div>
-        <div class="translation-area">
-          <div class="translation-box">
-            <p id="doctor-text" class="translation-text is-empty">번역된 내용이 여기에 표시됩니다</p>
-          </div>
-        </div>
-      </section>
+    <section class="doctor-stage" aria-label="진료 작업 영역">
+      <button
+        type="button"
+        id="btn-transcript-toggle"
+        class="transcript-toggle"
+        aria-expanded="false"
+        aria-controls="transcript-panel"
+      >
+        <span id="transcript-toggle-label" class="transcript-toggle__label">💬 원본 대화 기록 보기</span>
+        <i class="fas fa-chevron-down transcript-toggle__chevron" aria-hidden="true"></i>
+      </button>
 
-      <section class="panel panel--patient" aria-label="환자 외국어 미리보기">
-        <div class="panel-header">
-          <div class="panel-header-row">
-            <h2 id="patient-title" class="panel-title">외국어 · 환자</h2>
-            <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
-              <span class="detected-lang-badge__label">현재 감지된 언어:</span>
-              <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
-            </div>
-          </div>
-          <p id="patient-subtitle" class="panel-subtitle">환자 태블릿에 표시될 번역문</p>
-        </div>
-        <div class="translation-area">
-          <div class="translation-box">
-            <p id="patient-text" class="translation-text is-empty">환자 화면에 표시될 번역문</p>
-          </div>
-        </div>
-      </section>
-      </div>
-    </main>
+      <div id="transcript-panel" class="transcript-panel" aria-hidden="true">
+        <div class="panels-processing-wrap panels-processing-wrap--transcript">
+          <div class="panels">
+            <section class="panel panel--doctor" aria-label="의사 한국어">
+              <div class="panel-header">
+                <h2 class="panel-title">한국어 · 의사</h2>
+                <p class="panel-subtitle">진료실 대화의 한국어 기록</p>
+              </div>
+              <div class="translation-area">
+                <div class="translation-box">
+                  <p id="doctor-text" class="translation-text is-empty">번역된 내용이 여기에 표시됩니다</p>
+                </div>
+              </div>
+            </section>
 
+            <section class="panel panel--patient" aria-label="환자 외국어 미리보기">
+              <div class="panel-header">
+                <div class="panel-header-row">
+                  <h2 id="patient-title" class="panel-title">외국어 · 환자</h2>
+                  <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
+                    <span class="detected-lang-badge__label">현재 감지된 언어:</span>
+                    <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
+                  </div>
+                </div>
+                <p id="patient-subtitle" class="panel-subtitle">환자 태블릿에 표시될 번역문</p>
+              </div>
+              <div class="translation-area">
+                <div class="translation-box">
+                  <p id="patient-text" class="translation-text is-empty">환자 화면에 표시될 번역문</p>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+        <div id="conversation-transcript" class="conversation-transcript" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <div class="doctor-controls-dock">
     <footer class="master-controls">
       <div class="master-controls__buttons">
         <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="의사 말하기" aria-pressed="false">
@@ -128,6 +145,7 @@
         </button>
       </div>
     </footer>
+    </div>
       </div>
 
       <aside class="smart-chart-panel" aria-label="AI 진료 브리핑">
@@ -198,6 +216,14 @@
       var micAlert = document.getElementById("mic-alert");
       var panelsProcessing = document.getElementById("panels-processing");
       var panelsPatientRemote = document.getElementById("panels-patient-remote");
+      var doctorWorkspace = document.getElementById("doctor-workspace");
+      var btnTranscriptToggle = document.getElementById("btn-transcript-toggle");
+      var transcriptToggleLabel = document.getElementById("transcript-toggle-label");
+      var transcriptPanel = document.getElementById("transcript-panel");
+      var conversationTranscript = document.getElementById("conversation-transcript");
+      var transcriptOpen = false;
+      var TRANSCRIPT_TOGGLE_OPEN = "💬 원본 대화 기록 접기";
+      var TRANSCRIPT_TOGGLE_CLOSED = "💬 원본 대화 기록 보기";
 
       var sessionLangCode = null;
       var isLanguageLocked = false;
@@ -426,8 +452,72 @@
           });
       }
 
+      function renderConversationTranscript() {
+        if (!conversationTranscript) return;
+        if (!conversationHistory.length) {
+          conversationTranscript.innerHTML =
+            '<p class="conversation-transcript__empty">아직 저장된 대화 기록이 없습니다.</p>';
+          return;
+        }
+        var html = conversationHistory
+          .map(function (turn, index) {
+            var speakerLabel =
+              turn.speaker === "doctor"
+                ? "의사"
+                : turn.speaker === "patient"
+                  ? "환자"
+                  : "대화";
+            return (
+              '<article class="conversation-turn">' +
+              '<header class="conversation-turn__meta">#' +
+              (index + 1) +
+              " · " +
+              speakerLabel +
+              "</header>" +
+              '<p class="conversation-turn__line"><span class="conversation-turn__role">의사</span> ' +
+              escapeHtml(turn.doctor_text) +
+              "</p>" +
+              '<p class="conversation-turn__line"><span class="conversation-turn__role">환자</span> ' +
+              escapeHtml(turn.patient_text) +
+              "</p>" +
+              "</article>"
+            );
+          })
+          .join("");
+        conversationTranscript.innerHTML = html;
+        conversationTranscript.scrollTop = conversationTranscript.scrollHeight;
+      }
+
+      function setTranscriptPanelOpen(open) {
+        transcriptOpen = !!open;
+        if (transcriptPanel) {
+          transcriptPanel.classList.toggle("is-open", transcriptOpen);
+          transcriptPanel.setAttribute("aria-hidden", transcriptOpen ? "false" : "true");
+        }
+        if (doctorWorkspace) {
+          doctorWorkspace.classList.toggle(
+            "doctor-workspace--transcript-open",
+            transcriptOpen
+          );
+        }
+        if (btnTranscriptToggle) {
+          btnTranscriptToggle.setAttribute("aria-expanded", transcriptOpen ? "true" : "false");
+          btnTranscriptToggle.classList.toggle("is-open", transcriptOpen);
+        }
+        if (transcriptToggleLabel) {
+          transcriptToggleLabel.textContent = transcriptOpen
+            ? TRANSCRIPT_TOGGLE_OPEN
+            : TRANSCRIPT_TOGGLE_CLOSED;
+        }
+      }
+
+      function toggleTranscriptPanel() {
+        setTranscriptPanelOpen(!transcriptOpen);
+      }
+
       function clearAllTexts() {
         conversationHistory = [];
+        renderConversationTranscript();
         clearSmartChartSummary();
         setText(doctorText, "");
         setText(patientText, "");
@@ -455,6 +545,7 @@
           doctor_text: doctorLine,
           patient_text: patientLine,
         });
+        renderConversationTranscript();
       }
 
       function buildSummaryHistoryPayload() {
@@ -1254,6 +1345,14 @@
         window.onmouseup = function () {
           endDoctorSpeak();
         };
+
+        if (btnTranscriptToggle) {
+          btnTranscriptToggle.onclick = function () {
+            toggleTranscriptPanel();
+          };
+        }
+        setTranscriptPanelOpen(false);
+        renderConversationTranscript();
 
         if (btnSummary) {
           btnSummary.onclick = function () {
