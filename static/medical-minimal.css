@@ -121,13 +121,14 @@ body.doctor-master .header__actions {
   filter: none;
 }
 
-/* 하단 컨트롤 패널 — 새 진료 시작 (고스트) */
+/* 하단 컨트롤 패널 — 새 진료 시작 */
 .master-controls__reset {
   width: 100%;
   max-width: 680px;
   display: flex;
   justify-content: center;
-  margin: 0;
+  margin: 1.25rem 0 0;
+  padding-top: 0.25rem;
   font-family: inherit;
 }
 
@@ -135,48 +136,50 @@ body.doctor-master .header__actions {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.625rem;
-  min-width: 200px;
-  max-width: 320px;
-  width: 100%;
-  min-height: 52px;
-  padding: 0.75rem 1.75rem;
-  background: transparent;
-  color: #c0392b;
-  border: 1.5px solid #c0392b;
+  gap: 0.75rem;
+  min-width: 240px;
+  max-width: 420px;
+  width: auto;
+  min-height: 56px;
+  padding: 1rem 2rem;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 2px solid #e74c3c;
   border-radius: var(--radius-btn, 12px);
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: 1.125rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
   cursor: pointer;
   transition:
     background-color 0.22s ease,
     color 0.22s ease,
     border-color 0.22s ease,
-    box-shadow 0.22s ease;
-  box-shadow: none;
+    box-shadow 0.22s ease,
+    transform 0.15s ease;
+  box-shadow: 0 1px 4px rgba(185, 28, 28, 0.08);
 }
 
 .reset-btn--ghost i.fas {
-  font-size: 1rem;
+  font-size: 1.25rem;
   line-height: 1;
 }
 
 .reset-btn--ghost:hover,
 .reset-btn--ghost:focus-visible {
-  background-color: rgba(231, 76, 60, 0.1);
-  border-color: #e74c3c;
-  color: #e74c3c;
-  box-shadow: 0 2px 12px rgba(231, 76, 60, 0.12);
+  background-color: #fecaca;
+  border-color: #dc2626;
+  color: #991b1b;
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.18);
 }
 
 .reset-btn--ghost:active {
-  background-color: rgba(231, 76, 60, 0.16);
+  background-color: #fca5a5;
+  transform: scale(0.98);
 }
 
 .reset-btn--ghost:focus-visible {
-  outline: 2px solid rgba(231, 76, 60, 0.35);
-  outline-offset: 2px;
+  outline: 2px solid rgba(231, 76, 60, 0.45);
+  outline-offset: 3px;
 }
 
 .status-badge {
@@ -362,10 +365,10 @@ body.doctor-master .header__actions {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.875rem;
+  gap: 0;
   background: var(--mb-white);
   border-top: 1px solid var(--mb-border);
-  padding: 0.75rem 1.25rem 1.125rem;
+  padding: 0.875rem 1.25rem 1.25rem;
 }
 
 .speak-btn {
