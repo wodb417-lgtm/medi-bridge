@@ -6,8 +6,8 @@
 body.patient-display .display-stage {
   background: var(--mb-white);
   position: relative;
-  /* 플로팅 말하기 버튼이 자막·대기 화면을 가리지 않도록 */
-  padding-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  /* 플로팅 말하기 버튼(중앙 하단 15%)이 자막을 가리지 않도록 */
+  padding-bottom: calc(28vh + env(safe-area-inset-bottom, 0px));
   box-sizing: border-box;
   min-height: 100%;
 }
@@ -35,6 +35,7 @@ body.patient-display .display-stage {
   padding: 2rem;
   box-sizing: border-box;
   text-align: center;
+  pointer-events: none;
 }
 
 .status-force-panel__icon {
@@ -332,13 +333,13 @@ body.patient-display .audio-unlock-overlay__title {
   margin-bottom: 0.75rem;
 }
 
-/* 환자 직접 말하기 — 화면 하단 플로팅 (모바일·태블릿 safe-area 대응) */
+/* 환자 직접 말하기 — 중앙 하단 15% 플로팅 (엄지 터치존) */
 body.patient-display .patient-self-speak {
   position: fixed;
-  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  bottom: calc(15% + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1100;
+  z-index: 10150;
   width: 90%;
   max-width: 400px;
   margin: 0;
@@ -350,6 +351,7 @@ body.patient-display .patient-self-speak {
   justify-content: center;
   align-items: center;
   pointer-events: none;
+  isolation: isolate;
 }
 
 body.patient-display .patient-self-speak[hidden] {
@@ -358,9 +360,14 @@ body.patient-display .patient-self-speak[hidden] {
 
 body.patient-display .patient-self-speak .speak-btn {
   width: 100%;
-  min-height: 56px;
-  padding: 0.9rem 1.25rem;
+  min-height: 64px;
+  padding: 1rem 1.5rem;
   pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  position: relative;
+  z-index: 10151;
   border-radius: 14px;
   box-shadow: 0 4px 22px rgba(0, 40, 85, 0.16), 0 1px 4px rgba(0, 40, 85, 0.08);
   background: var(--mb-white);
