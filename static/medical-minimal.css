@@ -129,21 +129,28 @@ body.doctor-master .app {
 .doctor-workspace {
   flex: 1;
   display: flex;
+  flex-direction: row;
   align-items: stretch;
+  gap: 24px;
   min-height: 0;
+  width: 100%;
   overflow: hidden;
+  padding: 0 1.25rem;
+  box-sizing: border-box;
   background: var(--mb-surface);
 }
 
+/* 75 : 25 — 통역 메인(3) vs 브리핑 사이드(1) */
 .doctor-workspace__main {
   position: relative;
-  flex: 0 0 80%;
-  width: 80%;
+  flex: 3 1 0;
+  width: 75%;
   min-width: 0;
   max-width: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  order: 1;
 }
 
 .doctor-main-overlay {
@@ -156,14 +163,18 @@ body.doctor-master .app {
 .doctor-stage {
   position: relative;
   flex: 1 1 auto;
+  width: 100%;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 1rem 0.25rem;
+  padding: 0 0 0.25rem;
 }
 
 .doctor-script-scroll {
   flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -172,12 +183,31 @@ body.doctor-master .app {
 
 .panels-processing-wrap--primary {
   position: relative;
+  width: 100%;
   flex: 1 1 auto;
   min-height: min(52vh, 480px);
 }
 
-.panels-processing-wrap--primary > .panels {
+body.doctor-master .panels-processing-wrap--primary > .panels {
+  width: 100%;
   min-height: min(52vh, 480px);
+  flex: 1 1 auto;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 0.75rem 0 1rem;
+  box-sizing: border-box;
+}
+
+body.doctor-master .panels-processing-wrap--primary .panel {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+body.doctor-master .panels-processing-wrap--primary .translation-area,
+body.doctor-master .panels-processing-wrap--primary .translation-box {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 body.doctor-master .translation-text {
@@ -258,7 +288,7 @@ body.doctor-master .translation-area {
   flex-shrink: 0;
   width: 100%;
   margin-top: auto;
-  padding: 0.5rem 1rem 1rem;
+  padding: 0.5rem 0 1rem;
   position: sticky;
   bottom: 0;
   z-index: 15;
@@ -267,39 +297,67 @@ body.doctor-master .translation-area {
 
 .doctor-controls-dock .master-controls {
   width: 100%;
-  max-width: 720px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   border-radius: 12px;
   box-shadow: 0 2px 12px rgba(0, 40, 85, 0.08);
 }
 
+body.doctor-master .doctor-controls-dock .master-controls__buttons {
+  width: 100%;
+  display: flex;
+  gap: 1rem;
+}
+
+body.doctor-master .doctor-controls-dock .master-controls__buttons .speak-btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+body.doctor-master .doctor-controls-dock .master-controls__actions {
+  width: 100%;
+  max-width: none;
+  margin-top: 1rem;
+  gap: 1rem;
+}
+
+body.doctor-master .doctor-controls-dock .master-controls__actions .summary-btn,
+body.doctor-master .doctor-controls-dock .master-controls__actions .reset-btn--ghost {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
 .smart-chart-panel {
-  flex: 0 0 20%;
-  width: 20%;
-  min-width: 176px;
-  max-width: 260px;
+  flex: 1 0 25%;
+  width: 25%;
+  max-width: 400px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   min-height: 0;
-  padding: 0.65rem 0.75rem 0.65rem 0.5rem;
+  padding: 0.75rem 0 0.75rem 0;
   background: var(--mb-surface);
-  border-left: 1px solid var(--mb-border);
+  border-left: none;
   box-sizing: border-box;
   position: sticky;
   top: 0;
-  align-self: flex-start;
-  height: 100%;
+  align-self: stretch;
+  height: auto;
   max-height: 100%;
   overflow: hidden;
+  order: 2;
 }
 
 .smart-chart-card {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-height: 12rem;
+  max-height: calc(100vh - 7rem);
   width: 100%;
-  max-width: none;
+  max-width: 100%;
   margin: 0;
   background: #fafbfc;
   border: 1px solid #e8ecf1;
@@ -412,6 +470,13 @@ body.doctor-master .smart-chart-panel::before {
 
 body.doctor-master .doctor-workspace__main .lang-bar {
   flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+body.doctor-master .conversation-transcript {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 body.doctor-master .doctor-workspace__main .doctor-stage {
@@ -422,11 +487,15 @@ body.doctor-master .doctor-workspace__main .doctor-stage {
 @media (max-width: 1024px) {
   .doctor-workspace {
     flex-direction: column;
+    gap: 16px;
     overflow-y: auto;
+    padding: 0 1rem;
   }
 
   .doctor-workspace__main {
     flex: 1 1 auto;
+    width: 100%;
+    order: 1;
     overflow: visible;
   }
 
@@ -439,13 +508,13 @@ body.doctor-master .doctor-workspace__main .doctor-stage {
     width: 100%;
     max-width: none;
     min-width: 0;
-    padding: 0 1rem 1rem;
-    border-left: none;
-    border-top: 1px solid var(--mb-border);
+    order: 2;
+    padding: 0 0 1rem;
     position: sticky;
     top: auto;
     bottom: 0;
     max-height: 28vh;
+    align-self: auto;
   }
 
   .smart-chart-card {
