@@ -129,6 +129,7 @@ body.doctor-master .app {
 .doctor-workspace {
   flex: 1;
   display: flex;
+  align-items: stretch;
   min-height: 0;
   overflow: hidden;
   background: var(--mb-surface);
@@ -136,13 +137,12 @@ body.doctor-master .app {
 
 .doctor-workspace__main {
   position: relative;
-  flex: 1 1 36%;
-  min-width: 280px;
-  max-width: 440px;
+  flex: 1 1 78%;
+  min-width: 0;
+  max-width: none;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .doctor-main-overlay {
@@ -152,92 +152,60 @@ body.doctor-master .app {
   border-radius: 0;
 }
 
-.doctor-workspace--transcript-open .doctor-workspace__main {
-  flex: 1 1 58%;
-  max-width: none;
-}
-
 .doctor-stage {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 1rem;
+  padding: 0 1rem 0.25rem;
 }
 
-.transcript-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  width: 100%;
-  margin: 0.5rem 0 0.75rem;
-  padding: 0.75rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: inherit;
-  color: var(--mb-navy);
-  background: var(--mb-white);
-  border: 1px solid var(--mb-border);
-  border-radius: 10px;
-  cursor: pointer;
-  box-shadow: 0 1px 4px rgba(0, 40, 85, 0.06);
-  transition:
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.transcript-toggle:hover,
-.transcript-toggle:focus-visible {
-  border-color: var(--mb-accent);
-  box-shadow: 0 3px 12px rgba(0, 40, 85, 0.1);
-}
-
-.transcript-toggle__chevron {
-  font-size: 0.75rem;
-  transition: transform 0.3s ease;
-}
-
-.transcript-toggle.is-open .transcript-toggle__chevron {
-  transform: rotate(180deg);
-}
-
-.transcript-panel {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  visibility: hidden;
-  transition:
-    max-height 0.38s ease,
-    opacity 0.28s ease,
-    visibility 0.38s ease;
-}
-
-.transcript-panel.is-open {
-  max-height: min(72vh, 720px);
-  opacity: 1;
-  visibility: visible;
+.doctor-script-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-.panels-processing-wrap--transcript {
+.panels-processing-wrap--primary {
   position: relative;
-  min-height: 200px;
+  flex: 1 1 auto;
+  min-height: min(52vh, 480px);
 }
 
-.panels-processing-wrap--transcript > .panels {
-  min-height: 200px;
+.panels-processing-wrap--primary > .panels {
+  min-height: min(52vh, 480px);
+}
+
+body.doctor-master .translation-text {
+  font-size: clamp(1.5rem, 2.6vw, 2.125rem);
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+body.doctor-master .translation-text.is-empty {
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+body.doctor-master .translation-box {
+  padding: 2rem 1.75rem;
+  min-height: 12rem;
+}
+
+body.doctor-master .translation-area {
+  padding: 1.25rem 1.5rem 1.5rem;
 }
 
 .conversation-transcript {
-  margin-top: 0.75rem;
-  padding: 0.75rem 1rem 1rem;
-  background: var(--mb-white);
+  margin: 0.75rem 0 1rem;
+  padding: 0.65rem 0.875rem;
+  background: var(--mb-surface);
   border: 1px solid var(--mb-border);
-  border-radius: 8px;
-  max-height: 220px;
+  border-radius: 6px;
+  max-height: 160px;
   overflow-y: auto;
 }
 
@@ -284,43 +252,39 @@ body.doctor-master .app {
   flex-shrink: 0;
   width: 100%;
   margin-top: auto;
-  padding: 0.75rem 1rem 1rem;
+  padding: 0.5rem 1rem 1rem;
   position: sticky;
   bottom: 0;
-  z-index: 5;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, var(--mb-surface) 28%);
+  z-index: 15;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, var(--mb-surface) 35%);
 }
 
 .doctor-controls-dock .master-controls {
   width: 100%;
-  max-width: 520px;
+  max-width: 720px;
   margin: 0 auto;
   border-radius: 12px;
-  box-shadow: 0 2px 16px rgba(0, 40, 85, 0.08);
+  box-shadow: 0 2px 12px rgba(0, 40, 85, 0.08);
 }
 
 .smart-chart-panel {
-  flex: 1 1 64%;
-  width: auto;
-  min-width: 320px;
-  max-width: none;
+  flex: 0 0 22%;
+  width: 22%;
+  min-width: 200px;
+  max-width: 300px;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 1.25rem 2rem 1.25rem 1rem;
+  padding: 0.65rem 0.75rem 0.65rem 0.5rem;
   background: var(--mb-surface);
   border-left: 1px solid var(--mb-border);
   box-sizing: border-box;
-  justify-content: center;
-}
-
-.doctor-workspace--transcript-open .smart-chart-panel {
-  flex: 0 0 38%;
-  width: 38%;
-  min-width: 280px;
-  max-width: 420px;
-  padding: 1rem 1rem 1rem 0.75rem;
-  justify-content: flex-start;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .smart-chart-card {
@@ -329,48 +293,42 @@ body.doctor-master .app {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 640px;
-  margin: 0 auto;
-  background: var(--mb-white);
-  border: 1px solid var(--mb-border);
-  border-radius: 12px;
-  box-shadow:
-    0 4px 20px rgba(0, 40, 85, 0.08),
-    0 1px 3px rgba(0, 40, 85, 0.06);
+  max-width: none;
+  margin: 0;
+  background: #fafbfc;
+  border: 1px solid #e8ecf1;
+  border-radius: 8px;
+  box-shadow: none;
   overflow: hidden;
-}
-
-.doctor-workspace:not(.doctor-workspace--transcript-open) .smart-chart-card {
-  min-height: calc(100vh - 11rem);
 }
 
 .smart-chart-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-shrink: 0;
-  padding: 0.875rem 1rem;
-  background: linear-gradient(180deg, #fffef8 0%, var(--mb-white) 100%);
-  border-bottom: 1px solid var(--mb-border);
+  padding: 0.5rem 0.65rem;
+  background: #f4f6f8;
+  border-bottom: 1px solid #e8ecf1;
 }
 
 .smart-chart-card__title {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--mb-navy);
-  letter-spacing: -0.02em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--mb-text-muted);
+  letter-spacing: -0.01em;
   line-height: 1.3;
 }
 
 .smart-chart-copy-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
   flex-shrink: 0;
-  padding: 0.35rem 0.65rem;
-  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   font-family: inherit;
   color: var(--mb-navy);
@@ -404,26 +362,26 @@ body.doctor-master .app {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 1.125rem 1.25rem 1.5rem;
-  background: var(--mb-white);
+  padding: 0.65rem 0.75rem 0.875rem;
+  background: #fafbfc;
 }
 
 .smart-chart-placeholder {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   font-weight: 400;
   color: var(--mb-text-soft);
-  line-height: 1.8;
+  line-height: 1.65;
   text-align: center;
-  padding: 2rem 0.5rem;
+  padding: 1.25rem 0.35rem;
 }
 
 .smart-chart-content {
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: var(--mb-navy);
-  line-height: 1.8;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--mb-text-muted);
+  line-height: 1.65;
   letter-spacing: -0.01em;
   white-space: pre-wrap;
   word-break: break-word;
@@ -439,13 +397,8 @@ body.doctor-master .doctor-workspace__main .lang-bar {
 }
 
 body.doctor-master .doctor-workspace__main .doctor-stage {
-  flex: 0 1 auto;
-  min-height: 0;
-}
-
-body.doctor-master .doctor-workspace--transcript-open .doctor-workspace__main .doctor-stage {
   flex: 1 1 auto;
-  min-height: 200px;
+  min-height: 0;
 }
 
 @media (max-width: 1024px) {
@@ -456,7 +409,10 @@ body.doctor-master .doctor-workspace--transcript-open .doctor-workspace__main .d
 
   .doctor-workspace__main {
     flex: 1 1 auto;
-    max-width: none;
+    overflow: visible;
+  }
+
+  .doctor-script-scroll {
     overflow: visible;
   }
 
@@ -468,20 +424,19 @@ body.doctor-master .doctor-workspace--transcript-open .doctor-workspace__main .d
     padding: 0 1rem 1rem;
     border-left: none;
     border-top: 1px solid var(--mb-border);
-    justify-content: flex-start;
+    position: sticky;
+    top: auto;
+    bottom: 0;
+    max-height: 28vh;
   }
 
   .smart-chart-card {
-    min-height: 220px;
-    max-height: 42vh;
+    max-height: 26vh;
   }
 
-  .doctor-workspace:not(.doctor-workspace--transcript-open) .smart-chart-card {
-    min-height: 220px;
-  }
-
-  .transcript-panel.is-open {
-    max-height: min(65vh, 560px);
+  .doctor-controls-dock {
+    position: sticky;
+    bottom: 0;
   }
 }
 

@@ -62,20 +62,9 @@
       </select>
     </div>
 
-    <section class="doctor-stage" aria-label="진료 작업 영역">
-      <button
-        type="button"
-        id="btn-transcript-toggle"
-        class="transcript-toggle"
-        aria-expanded="false"
-        aria-controls="transcript-panel"
-      >
-        <span id="transcript-toggle-label" class="transcript-toggle__label">💬 원본 대화 기록 보기</span>
-        <i class="fas fa-chevron-down transcript-toggle__chevron" aria-hidden="true"></i>
-      </button>
-
-      <div id="transcript-panel" class="transcript-panel" aria-hidden="true">
-        <div class="panels-processing-wrap panels-processing-wrap--transcript">
+    <section class="doctor-stage" aria-label="실시간 통역 스크립트">
+      <div class="doctor-script-scroll">
+        <main class="panels-processing-wrap panels-processing-wrap--primary">
           <div class="panels">
             <section class="panel panel--doctor" aria-label="의사 한국어">
               <div class="panel-header">
@@ -107,7 +96,7 @@
               </div>
             </section>
           </div>
-        </div>
+        </main>
         <div id="conversation-transcript" class="conversation-transcript" aria-live="polite"></div>
       </div>
     </section>
@@ -216,14 +205,7 @@
       var micAlert = document.getElementById("mic-alert");
       var panelsProcessing = document.getElementById("panels-processing");
       var panelsPatientRemote = document.getElementById("panels-patient-remote");
-      var doctorWorkspace = document.getElementById("doctor-workspace");
-      var btnTranscriptToggle = document.getElementById("btn-transcript-toggle");
-      var transcriptToggleLabel = document.getElementById("transcript-toggle-label");
-      var transcriptPanel = document.getElementById("transcript-panel");
       var conversationTranscript = document.getElementById("conversation-transcript");
-      var transcriptOpen = false;
-      var TRANSCRIPT_TOGGLE_OPEN = "💬 원본 대화 기록 접기";
-      var TRANSCRIPT_TOGGLE_CLOSED = "💬 원본 대화 기록 보기";
 
       var sessionLangCode = null;
       var isLanguageLocked = false;
@@ -486,33 +468,6 @@
           .join("");
         conversationTranscript.innerHTML = html;
         conversationTranscript.scrollTop = conversationTranscript.scrollHeight;
-      }
-
-      function setTranscriptPanelOpen(open) {
-        transcriptOpen = !!open;
-        if (transcriptPanel) {
-          transcriptPanel.classList.toggle("is-open", transcriptOpen);
-          transcriptPanel.setAttribute("aria-hidden", transcriptOpen ? "false" : "true");
-        }
-        if (doctorWorkspace) {
-          doctorWorkspace.classList.toggle(
-            "doctor-workspace--transcript-open",
-            transcriptOpen
-          );
-        }
-        if (btnTranscriptToggle) {
-          btnTranscriptToggle.setAttribute("aria-expanded", transcriptOpen ? "true" : "false");
-          btnTranscriptToggle.classList.toggle("is-open", transcriptOpen);
-        }
-        if (transcriptToggleLabel) {
-          transcriptToggleLabel.textContent = transcriptOpen
-            ? TRANSCRIPT_TOGGLE_OPEN
-            : TRANSCRIPT_TOGGLE_CLOSED;
-        }
-      }
-
-      function toggleTranscriptPanel() {
-        setTranscriptPanelOpen(!transcriptOpen);
       }
 
       function clearAllTexts() {
@@ -1346,12 +1301,6 @@
           endDoctorSpeak();
         };
 
-        if (btnTranscriptToggle) {
-          btnTranscriptToggle.onclick = function () {
-            toggleTranscriptPanel();
-          };
-        }
-        setTranscriptPanelOpen(false);
         renderConversationTranscript();
 
         if (btnSummary) {
