@@ -140,7 +140,40 @@ body.doctor-master .app {
   background: var(--mb-surface);
 }
 
-/* 75 : 25 — 통역 메인(3) vs 브리핑 사이드(1) */
+/* 통역 전용 페이지 — 단일 컬럼 100% */
+.doctor-workspace--translate-only {
+  display: block;
+  padding: 0 1.5rem 1rem;
+}
+
+.doctor-workspace--translate-only .doctor-workspace__main--full {
+  width: 100%;
+  max-width: none;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.doctor-workspace--translate-only .smart-chart-panel {
+  display: none !important;
+}
+
+body.doctor-translate-mode .doctor-workspace__main--full .panels-processing-wrap--primary,
+body.doctor-translate-mode .doctor-workspace__main--full .panels-processing-wrap--primary > .panels {
+  min-height: min(58vh, 520px);
+}
+
+body.doctor-translate-mode .master-controls__actions--session-end {
+  justify-content: stretch;
+}
+
+body.doctor-translate-mode .master-controls__actions--session-end .reset-btn--session-end {
+  width: 100%;
+  max-width: none;
+}
+
+/* 75 : 25 — 통역 메인(3) vs 브리핑 사이드(1) — 레거시 2단 (scribe 등) */
 .doctor-workspace__main {
   position: relative;
   flex: 3 1 0;

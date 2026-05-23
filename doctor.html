@@ -7,20 +7,21 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
+  <link rel="stylesheet" href="/static/doctor-mode-nav.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="/static/medibridge-ws.js"></script>
   <script src="/static/clinic-audio.js"></script>
   <script src="/static/featureScript.js"></script>
   <script src="/static/index.js"></script>
 </head>
-<body class="doctor-master medibridge-ui">
+<body class="doctor-master doctor-translate-mode medibridge-ui">
   <div class="app">
     <header class="header">
       <div class="brand">
         <div class="brand-icon" aria-hidden="true">+</div>
         <div>
           <h1>MediBridge</h1>
-          <p>의사 마스터 화면 · 진료실 통제</p>
+          <p>외국인 통역 · 진료실 통제</p>
         </div>
       </div>
       <div class="header__actions">
@@ -36,12 +37,19 @@
       </div>
     </header>
 
+    <nav class="doctor-gnb" aria-label="의사 모드 선택">
+      <div class="doctor-gnb__inner">
+        <a href="/doctor" class="doctor-gnb__tab doctor-gnb__tab--active">🌍 외국인 통역 모드</a>
+        <a href="/scribe" class="doctor-gnb__tab">📝 AI 진료 서기 모드</a>
+      </div>
+    </nav>
+
     <div id="mic-alert" class="mic-alert" role="alert" aria-live="assertive">
       마이크를 연결하고 권한을 허용해 주세요
     </div>
 
-    <div id="doctor-workspace" class="doctor-workspace">
-      <div class="doctor-workspace__main">
+    <div id="doctor-workspace" class="doctor-workspace doctor-workspace--translate-only">
+      <div class="doctor-workspace__main doctor-workspace__main--full">
       <div id="panels-patient-remote" class="doctor-patient-remote-overlay doctor-main-overlay" aria-hidden="true">
         <div class="doctor-patient-remote-overlay__content">
           <span class="doctor-patient-remote-overlay__text">환자 태블릿 녹음 중</span>
@@ -97,7 +105,6 @@
             </section>
           </div>
         </main>
-        <div id="conversation-transcript" class="conversation-transcript" aria-live="polite"></div>
       </div>
     </section>
 
@@ -123,35 +130,15 @@
           </span>
         </button>
       </div>
-      <div class="master-controls__actions">
-        <button type="button" id="btn-summary" class="summary-btn" aria-label="진료 요약 및 클립보드 복사">
-          <i class="fas fa-clipboard-list" aria-hidden="true"></i>
-          <span class="summary-btn__label">📝 진료 요약 및 복사</span>
-        </button>
-        <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost" aria-label="새 진료 시작 — 기록 초기화">
+      <div class="master-controls__actions master-controls__actions--session-end">
+        <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost reset-btn--session-end" aria-label="진료 종료 및 화면 초기화">
           <i class="fas fa-redo-alt" aria-hidden="true"></i>
-          <span id="btn-reset-label">새 진료 시작</span>
+          <span>🔄 진료 종료 및 화면 초기화</span>
         </button>
       </div>
     </footer>
     </div>
       </div>
-
-      <aside class="smart-chart-panel" aria-label="AI 진료 브리핑">
-        <div class="smart-chart-card">
-          <div class="smart-chart-card__header">
-            <h2 class="smart-chart-card__title">📋 AI 진료 브리핑</h2>
-            <button type="button" id="btn-chart-copy" class="smart-chart-copy-btn" disabled aria-label="브리핑 텍스트 복사" title="클립보드에 복사">
-              <i class="fas fa-copy" aria-hidden="true"></i>
-              <span>복사</span>
-            </button>
-          </div>
-          <div id="smart-chart-body" class="smart-chart-body is-placeholder">
-            <p id="smart-chart-placeholder" class="smart-chart-placeholder">대화 내용이 이곳에 요약됩니다.</p>
-            <div id="smart-chart-content" class="smart-chart-content" hidden></div>
-          </div>
-        </div>
-      </aside>
     </div>
 
     <div id="settings-modal" class="settings-modal" aria-hidden="true" role="dialog" aria-labelledby="settings-modal-title">
@@ -184,20 +171,6 @@
       var btnDoctor = document.getElementById("btn-doctor");
       var btnPatient = document.getElementById("btn-patient");
       var btnReset = document.getElementById("btn-reset");
-      var btnResetLabel = document.getElementById("btn-reset-label");
-      var RESET_LABEL_IDLE = "새 진료 시작";
-      var RESET_LABEL_END_SESSION = "🔄 진료 종료 및 초기화 (다음 환자 받기)";
-      var btnSummary = document.getElementById("btn-summary");
-      var btnChartCopy = document.getElementById("btn-chart-copy");
-      var smartChartBody = document.getElementById("smart-chart-body");
-      var smartChartPlaceholder = document.getElementById("smart-chart-placeholder");
-      var smartChartContent = document.getElementById("smart-chart-content");
-      var latestSummaryText = "";
-      var SMART_CHART_PLACEHOLDER = "대화 내용이 이곳에 요약됩니다.";
-      var conversationHistory = [];
-      var isSummaryInProgress = false;
-      var SUMMARY_BTN_DEFAULT = "📝 진료 요약 및 복사";
-      var SUMMARY_BTN_LOADING = "요약 중...";
       var patientTitle = document.getElementById("patient-title");
       var patientSubtitle = document.getElementById("patient-subtitle");
       var languageSelect = document.getElementById("language-select");
@@ -208,8 +181,6 @@
       var micAlert = document.getElementById("mic-alert");
       var panelsProcessing = document.getElementById("panels-processing");
       var panelsPatientRemote = document.getElementById("panels-patient-remote");
-      var conversationTranscript = document.getElementById("conversation-transcript");
-
       var sessionLangCode = null;
       var isLanguageLocked = false;
 
@@ -333,168 +304,7 @@
         el.classList.toggle("is-empty", !text);
       }
 
-      var DOSE_HIGHLIGHT_STYLE =
-        "color: #e74c3c; font-weight: bold; background-color: #fee2e2; padding: 0 4px; border-radius: 4px;";
-      var DOSE_HIGHLIGHT_RE =
-        /(\d+(?:\.\d+)?(?:일분|일치|주일|개월|시간|분|회|정|알|캡슐|포|통|mg|mL|ml|년|일|주|번|시)?|\d+(?:\.\d+)?|(?:일분|일치|주일|개월|시간|캡슐|mg|mL|ml|회|정|알|포|통))/gi;
-
-      function escapeHtml(text) {
-        return String(text)
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/"/g, "&quot;");
-      }
-
-      function highlightPrescriptionDoses(text) {
-        var escaped = escapeHtml(text);
-        return escaped.replace(DOSE_HIGHLIGHT_RE, function (match) {
-          return (
-            '<span style="' +
-            DOSE_HIGHLIGHT_STYLE +
-            '">' +
-            match +
-            "</span>"
-          );
-        });
-      }
-
-      function clearSmartChartSummary() {
-        latestSummaryText = "";
-        if (smartChartContent) {
-          smartChartContent.textContent = "";
-          smartChartContent.innerHTML = "";
-          smartChartContent.hidden = true;
-        }
-        if (smartChartPlaceholder) {
-          smartChartPlaceholder.textContent = SMART_CHART_PLACEHOLDER;
-          smartChartPlaceholder.hidden = false;
-        }
-        if (smartChartBody) {
-          smartChartBody.classList.add("is-placeholder");
-        }
-        if (btnChartCopy) {
-          btnChartCopy.disabled = true;
-        }
-      }
-
-      function setSmartChartSummary(text) {
-        latestSummaryText = (text || "").trim();
-        if (!latestSummaryText) {
-          clearSmartChartSummary();
-          return;
-        }
-        if (smartChartContent) {
-          smartChartContent.innerHTML = highlightPrescriptionDoses(latestSummaryText);
-          smartChartContent.hidden = false;
-        }
-        if (smartChartPlaceholder) {
-          smartChartPlaceholder.hidden = true;
-        }
-        if (smartChartBody) {
-          smartChartBody.classList.remove("is-placeholder");
-        }
-        if (btnChartCopy) {
-          btnChartCopy.disabled = false;
-        }
-        if (smartChartBody) {
-          smartChartBody.scrollTop = 0;
-        }
-        setSessionResetNudge(true);
-      }
-
-      function setSessionResetNudge(active) {
-        if (!btnReset) return;
-        btnReset.classList.toggle("reset-btn--session-nudge", !!active);
-        if (btnResetLabel) {
-          btnResetLabel.textContent = active
-            ? RESET_LABEL_END_SESSION
-            : RESET_LABEL_IDLE;
-        }
-        btnReset.setAttribute(
-          "aria-label",
-          active
-            ? "진료 종료 및 초기화 — 다음 환자 받기"
-            : "새 진료 시작 — 기록 초기화"
-        );
-      }
-
-      function setSmartChartLoading(loading) {
-        if (!smartChartPlaceholder || !smartChartContent) return;
-        if (loading) {
-          if (smartChartBody) {
-            smartChartBody.classList.add("is-placeholder");
-          }
-          smartChartContent.hidden = true;
-          smartChartPlaceholder.hidden = false;
-          smartChartPlaceholder.textContent = "요약을 생성하고 있습니다…";
-          return;
-        }
-        if (!latestSummaryText.trim()) {
-          smartChartPlaceholder.textContent = SMART_CHART_PLACEHOLDER;
-          smartChartPlaceholder.hidden = false;
-          smartChartContent.hidden = true;
-          if (smartChartBody) {
-            smartChartBody.classList.add("is-placeholder");
-          }
-        }
-      }
-
-      function copySmartChartToClipboard() {
-        if (!latestSummaryText.trim()) {
-          alert("복사할 요약 내용이 없습니다.");
-          return;
-        }
-        copySummaryToClipboard(latestSummaryText)
-          .then(function () {
-            alert("차트 요약본이 클립보드에 복사되었습니다. (Ctrl+V로 붙여넣기)");
-          })
-          .catch(function (err) {
-            alert("클립보드 복사에 실패했습니다: " + (err.message || String(err)));
-          });
-      }
-
-      function renderConversationTranscript() {
-        if (!conversationTranscript) return;
-        if (!conversationHistory.length) {
-          conversationTranscript.innerHTML =
-            '<p class="conversation-transcript__empty">아직 저장된 대화 기록이 없습니다.</p>';
-          return;
-        }
-        var html = conversationHistory
-          .map(function (turn, index) {
-            var speakerLabel =
-              turn.speaker === "doctor"
-                ? "의사"
-                : turn.speaker === "patient"
-                  ? "환자"
-                  : "대화";
-            return (
-              '<article class="conversation-turn">' +
-              '<header class="conversation-turn__meta">#' +
-              (index + 1) +
-              " · " +
-              speakerLabel +
-              "</header>" +
-              '<p class="conversation-turn__line"><span class="conversation-turn__role">의사</span> ' +
-              escapeHtml(turn.doctor_text) +
-              "</p>" +
-              '<p class="conversation-turn__line"><span class="conversation-turn__role">환자</span> ' +
-              escapeHtml(turn.patient_text) +
-              "</p>" +
-              "</article>"
-            );
-          })
-          .join("");
-        conversationTranscript.innerHTML = html;
-        conversationTranscript.scrollTop = conversationTranscript.scrollHeight;
-      }
-
       function clearAllTexts() {
-        setSessionResetNudge(false);
-        conversationHistory = [];
-        renderConversationTranscript();
-        clearSmartChartSummary();
         setText(doctorText, "");
         setText(patientText, "");
         doctorText.textContent = "번역된 내용이 여기에 표시됩니다";
@@ -503,81 +313,6 @@
         patientText.classList.add("is-empty");
         languageSelect.selectedIndex = 0;
         applyUnlockedUI();
-      }
-
-      function appendConversationTurn(msg) {
-        if (!msg || msg.type !== "result") return;
-        var doctorLine = (msg.doctor_text || "").trim();
-        var patientLine = (msg.patient_text || "").trim();
-        if (!doctorLine && !patientLine) return;
-        if (
-          doctorLine === "번역된 내용이 여기에 표시됩니다" ||
-          patientLine === "환자 화면에 표시될 번역문"
-        ) {
-          return;
-        }
-        conversationHistory.push({
-          speaker: msg.speaker || "unknown",
-          doctor_text: doctorLine,
-          patient_text: patientLine,
-        });
-        renderConversationTranscript();
-      }
-
-      function buildSummaryHistoryPayload() {
-        return conversationHistory.map(function (turn) {
-          return {
-            speaker: turn.speaker,
-            doctor_text: turn.doctor_text,
-            patient_text: turn.patient_text,
-          };
-        });
-      }
-
-      function setSummaryButtonLoading(loading) {
-        isSummaryInProgress = loading;
-        setSmartChartLoading(loading);
-        if (!btnSummary) return;
-        btnSummary.disabled = loading;
-        var labelEl = btnSummary.querySelector(".summary-btn__label");
-        if (labelEl) {
-          labelEl.textContent = loading ? SUMMARY_BTN_LOADING : SUMMARY_BTN_DEFAULT;
-        }
-      }
-
-      function requestClinicalSummary() {
-        if (isSummaryInProgress) return;
-        var history = buildSummaryHistoryPayload();
-        if (history.length === 0) {
-          alert("요약할 대화 기록이 없습니다. 먼저 통역 대화를 진행해 주세요.");
-          return;
-        }
-        setSummaryButtonLoading(true);
-        connectWebSocket()
-          .then(function () {
-            sendWs({ type: "request_summary", history: history });
-          })
-          .catch(function () {
-            setSummaryButtonLoading(false);
-            alert("서버에 연결할 수 없습니다.");
-          });
-      }
-
-      function copySummaryToClipboard(text) {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          return navigator.clipboard.writeText(text);
-        }
-        return Promise.reject(new Error("클립보드 API를 사용할 수 없습니다."));
-      }
-
-      function handleSummaryResult(msg) {
-        setSummaryButtonLoading(false);
-        var text = (msg && msg.text) ? String(msg.text).trim() : "";
-        if (!text) {
-          alert(msg && msg.error ? msg.error : "요약 결과가 비어 있습니다.");
-          return;
-        }
-        setSmartChartSummary(text);
       }
 
       function showMicAlert() {
@@ -1046,15 +781,7 @@
           return;
         }
 
-        if (msg.type === "summary_result") {
-          handleSummaryResult(msg);
-          return;
-        }
-
         if (msg.type === "error") {
-          if (isSummaryInProgress) {
-            setSummaryButtonLoading(false);
-          }
           isProcessing = false;
           isPatientRecording = false;
           patientSpeakMirrored = false;
@@ -1076,7 +803,6 @@
           hideProcessingOverlay();
           setText(doctorText, msg.doctor_text || "");
           setText(patientText, msg.patient_text || "");
-          appendConversationTurn(msg);
 
           if (msg.language_locked && msg.session_lang && msg.detected_language_label_ko) {
             applyLockedLanguageUI(
@@ -1321,20 +1047,6 @@
         window.onmouseup = function () {
           endDoctorSpeak();
         };
-
-        renderConversationTranscript();
-
-        if (btnSummary) {
-          btnSummary.onclick = function () {
-            requestClinicalSummary();
-          };
-        }
-
-        if (btnChartCopy) {
-          btnChartCopy.onclick = function () {
-            copySmartChartToClipboard();
-          };
-        }
 
         btnReset.onclick = function () {
           if (!confirm("현재 진료 기록을 초기화하시겠습니까?")) return;

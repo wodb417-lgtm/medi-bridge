@@ -300,24 +300,24 @@ WHISPER_DOCTOR_PROMPT = (
     "경상도 사투리나 흘리는 발음, 일상적인 의학 용어가 있더라도 전체 맥락을 파악하여 표준어로 자연스럽고 정확하게 받아적어 주세요."
 )
 
-CLINICAL_SUMMARY_SYSTEM_PROMPT = """너는 전문 의료 보조 AI(Medical Scribe)야. 의사와 환자의 통역 대화 기록을 분석해 차트용 개조식 요약을 작성한다.
+CLINICAL_SUMMARY_SYSTEM_PROMPT = """너는 전문 의료 보조 AI(Medical Scribe)야. 의사와 환자의 진료 대화 기록을 분석해 법적 방어·차트용 개조식 요약을 작성한다.
 
-## 최우선 룰 (방어 진료 · 알리바이 기록)
-이 요약본은 의료 소송 방어용 알리바이로 쓰일 수 있어. 따라서 의사가 환자에게 설명한 부작용, 금기사항(음주·운전·임신·수유 등), 복약 지침, 검사·추적 안내, 생활 수칙이 대화에 1초라도 스쳐 지나갔다면 절대로 누락하지 말고, 반드시 아래 형식으로 굵고 명확하게 기록해:
-  🚨 의사 지시 및 고지사항: (구체적 내용 나열)
-해당 내용이 대화에 전혀 없으면 "🚨 의사 지시 및 고지사항: (본 통역 구간에서 별도 고지 없음)"이라고 적어.
+## 최우선 룰 (방어 진료 · 법적 증거)
+이 요약본은 의료 소송 방어용 알리바이로 쓰일 수 있다. 대화 중 의사가 환자에게 설명한 부작용, 금기사항(음주, 흡연, 운전, 임신, 수유 등), 복약·생활 지침, 검사·추적 안내가 1초라도 언급되었다면 법적 방어 증거로 사용할 수 있도록 절대 누락하지 말고, 요약본 **최상단 첫 번째 블록**에 반드시 아래 형식으로 굵고 붉은 강조 문구로 기록한다:
+🚨 의사 지시 및 고지사항: (구체적 내용을 개조식으로 전부 나열)
+고지·지시 내용이 전혀 없을 때만: 🚨 의사 지시 및 고지사항: (본 진료 구간에서 별도 고지 없음)
 
-## 출력 형식 (반드시 이 순서, 마크다운 금지)
-🔴 주증상: (한 줄 개조)
-🟡 상세 병력: (발생 시기·양상·동반 증상 등 핵심만 개조)
-🚨 의사 지시/고지: (부작용·금기·복약·생활 지침 — 대화에 있으면 빠짐없이)
-🔵 처치 및 계획: (처방·검사·추적 등, 없으면 생략 가능)
+## 출력 형식 (반드시 이 순서 — 🚨 블록이 맨 위, 마크다운 금지)
+1) 🚨 의사 지시 및 고지사항: (최상단 — 가장 중요)
+2) 🔴 주증상: (한 줄 개조)
+3) 🟡 상세 병력: (발생 시기·양상·동반 증상)
+4) 🔵 처치 및 계획: (처방·검사·추적, 없으면 생략)
 
-- 절대 길게 줄글로 쓰지 말고 핵심 단어 위주의 개조식으로 작성해.
-- 일반 텍스트 기호(-, *)만 사용하고 마크다운(#, ** 등)은 쓰지 마.
+- 절대 길게 줄글로 쓰지 말고 핵심 단어 위주 개조식.
+- 일반 텍스트 기호(-, *)만 사용. 마크다운(#, **) 금지.
 
 ## STT 보정
-'30분 처방'처럼 의학적으로 말이 안 되는 오인식이 있으면 전체 맥락을 보고 논리적 수치(예: 3일분 처방)로 보정해 요약해."""
+'30분 처방' 등 의학적으로 말이 안 되는 오인식은 맥락상 타당한 수치(예: 3일분 처방)로 보정."""
 
 MEDICAL_INTERPRETER_SYSTEM_PROMPT = """You are an intelligent medical AI assistant in a Korean hospital outpatient clinic.
 You specialize in interpreting a doctor's spoken Korean (via speech-to-text) into the patient's language with clinical accuracy and safety.
@@ -1046,6 +1046,7 @@ async def process_audio_session(
     target_lang: str | None = None,
     upload_filename: str | None = None,
     content_type: str | None = None,
+    scribe_mode: bool = False,
 ) -> dict:
     global current_session_lang
 
@@ -1125,6 +1126,21 @@ async def process_audio_session(
         raise ValueError("음성에서 텍스트를 인식하지 못했습니다.")
 
     if speaker == "doctor":
+        if scribe_mode:
+            logger.info("Scribe mode doctor speech: STT only (no foreign translation)")
+            return build_ui_payload(
+                {
+                    "type": "result",
+                    "speaker": "doctor",
+                    "original": original,
+                    "translated": original,
+                    "detected_language": "ko",
+                    "detected_language_label_ko": "한국어 (AI 서기)",
+                    "source_language": detected_source or "ko",
+                    "session_lang": "ko",
+                    "language_locked": True,
+                }
+            )
         dest_lang = resolve_patient_target_lang()
         logger.info(
             "Doctor speech: whisper_source=%s → translate target=%s (override=%r)",
@@ -1186,6 +1202,14 @@ async def serve_doctor():
     return {"error": "doctor.html not found"}
 
 
+@app.get("/scribe")
+async def serve_scribe():
+    path = BASE_DIR / "scribe.html"
+    if path.exists():
+        return FileResponse(path)
+    return {"error": "scribe.html not found"}
+
+
 @app.get("/patient")
 async def serve_patient():
     path = BASE_DIR / "patient.html"
@@ -1200,6 +1224,7 @@ async def api_transcribe(
     target_lang: str = Form(""),
     manual_lang: str = Form(""),
     speaker: str = Form("doctor"),
+    mode: str = Form(""),
 ):
     """
     multipart/form-data 오디오 업로드 (의사·환자 공용).
@@ -1223,6 +1248,7 @@ async def api_transcribe(
     manual = (manual_lang or "").strip()
     target = (target_lang or "").strip()
     target_override = manual if manual else (target if target else None)
+    scribe_mode = (mode or "").strip().lower() == "scribe"
 
     await broadcast_ui_status("processing", speaker=speaker_norm)
     try:
@@ -1232,6 +1258,7 @@ async def api_transcribe(
             target_lang=target_override,
             upload_filename=audio.filename,
             content_type=audio.content_type,
+            scribe_mode=scribe_mode,
         )
         await manager.broadcast_all(result)
         await asyncio.sleep(0)

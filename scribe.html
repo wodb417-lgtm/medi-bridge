@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediBridge · AI 진료 서기</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="/static/common.css" />
+  <link rel="stylesheet" href="/static/medical-minimal.css" />
+  <link rel="stylesheet" href="/static/doctor-mode-nav.css" />
+  <link rel="stylesheet" href="/static/scribe.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script src="/static/medibridge-ws.js"></script>
+  <script src="/static/clinic-audio.js"></script>
+</head>
+<body class="doctor-master doctor-scribe-mode medibridge-ui">
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">+</div>
+        <div>
+          <h1>MediBridge</h1>
+          <p>AI 진료 서기 · 방어 진료 차트</p>
+        </div>
+      </div>
+      <div class="header__actions">
+        <div id="connection-status" class="status-badge status-badge--warn">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="connection-status-text">서버 연결 중…</span>
+        </div>
+      </div>
+    </header>
+
+    <nav class="doctor-gnb" aria-label="의사 모드 선택">
+      <div class="doctor-gnb__inner">
+        <a href="/doctor" class="doctor-gnb__tab">🌍 외국인 통역 모드</a>
+        <a href="/scribe" class="doctor-gnb__tab doctor-gnb__tab--active">📝 AI 진료 서기 모드</a>
+      </div>
+    </nav>
+
+    <div id="mic-alert" class="mic-alert" role="alert" aria-live="assertive">
+      마이크를 연결하고 권한을 허용해 주세요
+    </div>
+
+    <div class="scribe-workspace">
+      <p class="scribe-banner">
+        좌측에서 대화를 녹음하고, 우측 <strong>AI 진료 브리핑</strong>에서 방어 차트를 확인하세요.
+        🚨 고지사항은 요약 최상단에 강조됩니다. 다음 환자 전 <strong>진료 종료 및 화면 초기화</strong>를 눌러 주세요.
+      </p>
+
+      <div class="scribe-layout">
+        <aside class="scribe-script-col" aria-label="실시간 진료 스크립트">
+          <div id="panels-processing" class="processing-overlay scribe-main-overlay" aria-hidden="true">
+            <div class="processing-overlay__content">
+              <span class="processing-overlay__text">처리 중</span>
+              <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            </div>
+          </div>
+          <div id="panels-patient-remote" class="doctor-patient-remote-overlay scribe-main-overlay" aria-hidden="true">
+            <div class="doctor-patient-remote-overlay__content">
+              <span class="doctor-patient-remote-overlay__text">환자 태블릿 녹음 중</span>
+              <span class="doctor-patient-remote-overlay__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            </div>
+          </div>
+
+          <div class="scribe-panels-wrap">
+            <div class="panels scribe-panels">
+              <section class="panel panel--doctor" aria-label="의사 발화">
+                <div class="panel-header">
+                  <h2 class="panel-title">의사</h2>
+                  <p class="panel-subtitle">한국어 STT</p>
+                </div>
+                <div class="translation-area">
+                  <div class="translation-box">
+                    <p id="doctor-text" class="translation-text is-empty">의사 발화가 여기에 표시됩니다</p>
+                  </div>
+                </div>
+              </section>
+              <section class="panel panel--patient" aria-label="환자 발화">
+                <div class="panel-header">
+                  <h2 class="panel-title">환자</h2>
+                  <p class="panel-subtitle">한국어 STT</p>
+                </div>
+                <div class="translation-area">
+                  <div class="translation-box">
+                    <p id="patient-text" class="translation-text is-empty">환자 발화가 여기에 표시됩니다</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+          <div id="scribe-transcript-mini" class="scribe-transcript-mini" aria-live="polite"></div>
+        </aside>
+
+        <main class="scribe-briefing-col" aria-label="AI 진료 브리핑 및 방어 기록">
+          <article class="scribe-briefing-card">
+            <header class="scribe-briefing-card__header">
+              <h2 class="scribe-briefing-card__title">📋 AI 진료 브리핑 및 방어 기록</h2>
+              <button type="button" id="btn-chart-copy" class="smart-chart-copy-btn" disabled aria-label="요약 복사">
+                <i class="fas fa-copy" aria-hidden="true"></i>
+                <span>복사</span>
+              </button>
+            </header>
+            <div id="scribe-briefing-body" class="scribe-briefing-body is-placeholder">
+              <p id="scribe-briefing-placeholder" class="scribe-briefing-placeholder">
+                진료 대화를 녹음한 뒤 「진료 요약 생성」을 누르면<br />
+                🚨 의사 지시 및 고지사항이 최상단에 강조된 차트 요약이 표시됩니다.
+              </p>
+              <div id="scribe-briefing-content" class="scribe-briefing-content" hidden></div>
+            </div>
+          </article>
+        </main>
+      </div>
+
+      <div class="scribe-controls-dock">
+        <footer class="master-controls">
+          <div class="master-controls__buttons">
+            <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="의사 말하기" aria-pressed="false">
+              <i class="fas fa-microphone" aria-hidden="true"></i>
+              <span class="speak-btn__label">의사 말하기</span>
+            </button>
+            <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" data-recording-label="말하기 종료" aria-pressed="false">
+              <i class="fas fa-microphone" aria-hidden="true"></i>
+              <span class="speak-btn__label">환자 말하기</span>
+            </button>
+            <button type="button" id="btn-summary" class="summary-btn" aria-label="진료 요약 생성">
+              <i class="fas fa-file-medical" aria-hidden="true"></i>
+              <span class="summary-btn__label">📝 진료 요약 생성</span>
+            </button>
+          </div>
+          <div class="master-controls__actions master-controls__actions--session-end">
+            <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost reset-btn--session-end" aria-label="진료 종료 및 화면 초기화">
+              <i class="fas fa-redo-alt" aria-hidden="true"></i>
+              <span id="btn-reset-label">🔄 진료 종료 및 화면 초기화</span>
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/scribe.js"></script>
+</body>
+</html>
