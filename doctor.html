@@ -130,7 +130,7 @@
         </button>
         <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost" aria-label="새 진료 시작 — 기록 초기화">
           <i class="fas fa-redo-alt" aria-hidden="true"></i>
-          <span>새 진료 시작</span>
+          <span id="btn-reset-label">새 진료 시작</span>
         </button>
       </div>
     </footer>
@@ -184,6 +184,9 @@
       var btnDoctor = document.getElementById("btn-doctor");
       var btnPatient = document.getElementById("btn-patient");
       var btnReset = document.getElementById("btn-reset");
+      var btnResetLabel = document.getElementById("btn-reset-label");
+      var RESET_LABEL_IDLE = "새 진료 시작";
+      var RESET_LABEL_END_SESSION = "🔄 진료 종료 및 초기화 (다음 환자 받기)";
       var btnSummary = document.getElementById("btn-summary");
       var btnChartCopy = document.getElementById("btn-chart-copy");
       var smartChartBody = document.getElementById("smart-chart-body");
@@ -397,6 +400,23 @@
         if (smartChartBody) {
           smartChartBody.scrollTop = 0;
         }
+        setSessionResetNudge(true);
+      }
+
+      function setSessionResetNudge(active) {
+        if (!btnReset) return;
+        btnReset.classList.toggle("reset-btn--session-nudge", !!active);
+        if (btnResetLabel) {
+          btnResetLabel.textContent = active
+            ? RESET_LABEL_END_SESSION
+            : RESET_LABEL_IDLE;
+        }
+        btnReset.setAttribute(
+          "aria-label",
+          active
+            ? "진료 종료 및 초기화 — 다음 환자 받기"
+            : "새 진료 시작 — 기록 초기화"
+        );
       }
 
       function setSmartChartLoading(loading) {
@@ -471,6 +491,7 @@
       }
 
       function clearAllTexts() {
+        setSessionResetNudge(false);
         conversationHistory = [];
         renderConversationTranscript();
         clearSmartChartSummary();
