@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediBridge · 데모 안내</title>
+  <title data-i18n="portfolio.title">MediBridge · Demo</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
   <link rel="stylesheet" href="/static/portfolio.css" />
+  <link rel="stylesheet" href="/static/ui-lang.css" />
+  <script src="/static/ui-lang.js"></script>
 </head>
 <body class="portfolio-page medibridge-ui">
   <header class="header">
@@ -15,77 +17,71 @@
       <div class="brand-icon" aria-hidden="true">+</div>
       <div>
         <h1>MediBridge</h1>
-        <p>진료실 통역 · AI 진료 서기</p>
+        <p data-i18n="portfolio.brand">Clinic interpreter and AI scribe</p>
       </div>
     </div>
+    <div class="header__actions"></div>
   </header>
 
   <main class="portfolio">
     <section class="portfolio-hero">
-      <p class="portfolio-kicker">데모 안내</p>
-      <h2>외국인 진료는 통역으로,<br />한국어 진료는 방어 기록으로.</h2>
-      <p class="portfolio-lead">
-        의사 화면 하나에서 통역과 차트 요약이 섞이지 않도록 두 모드로 나눴습니다.
-        아래 순서대로 세 화면을 열면 역할이 구분됩니다.
+      <p class="portfolio-kicker" data-i18n="portfolio.kicker">Demo guide</p>
+      <h2 data-i18n-html="portfolio.hero">An interpreter when the patient speaks another language.<br />A chart note when the visit is in Korean.</h2>
+      <p class="portfolio-lead" data-i18n="portfolio.lead">
+        Those are two different jobs, so they live on separate screens. Open the three views in the order below and it is clear which one does what.
       </p>
     </section>
 
     <section class="portfolio-section" aria-labelledby="how-to">
-      <h3 id="how-to">보는 순서</h3>
+      <h3 id="how-to" data-i18n="portfolio.how">How to look at it</h3>
       <ol class="portfolio-steps">
         <li>
           <strong>1</strong>
           <div>
-            <b>의사 화면과 환자 화면을 나란히 엽니다.</b>
-            <p>
-              <a href="/doctor">외국인 통역</a>은 이 창에 두고,
-              <a href="/patient">환자 태블릿</a>은 옆 창이나 태블릿에서 엽니다.
-            </p>
+            <b data-i18n="portfolio.step1.title">Open the clinician screen and the patient screen side by side.</b>
+            <p data-i18n-html="portfolio.step1.body">Keep <a href="/doctor">Interpreter</a> in this window. Open the <a href="/patient">patient tablet</a> in another window, or on a tablet.</p>
           </div>
         </li>
         <li>
           <strong>2</strong>
           <div>
-            <b>의사 말하기를 누르고 한국어로 말합니다.</b>
-            <p>환자 화면에 번역문이 뜨고, 문장 단위로 음성이 나갑니다. 언어는 의사 화면에서 고를 수 있습니다.</p>
+            <b data-i18n="portfolio.step2.title">Press Speak as clinician and talk in Korean.</b>
+            <p data-i18n="portfolio.step2.body">The translation shows up on the patient screen, and the audio plays one sentence at a time. Choose the patient’s language on the clinician screen.</p>
           </div>
         </li>
         <li>
           <strong>3</strong>
           <div>
-            <b>서기 화면에서 요약을 만듭니다.</b>
-            <p>
-              <a href="/scribe">AI 진료 서기</a>에서 대화를 녹음한 뒤 「진료 요약 생성」을 누릅니다.
-              의사가 설명한 부작용, 금기, 지시가 요약 맨 위에 붉게 남습니다.
-            </p>
+            <b data-i18n="portfolio.step3.title">Create the note on the scribe screen.</b>
+            <p data-i18n-html="portfolio.step3.body">Record the visit on <a href="/scribe">AI scribe</a>, then press Create visit note. Warnings and instructions the clinician gave are pinned at the top, in red.</p>
           </div>
         </li>
       </ol>
     </section>
 
     <section class="portfolio-section" aria-labelledby="screens">
-      <h3 id="screens">세 화면</h3>
+      <h3 id="screens" data-i18n="portfolio.screens">Three screens</h3>
       <div class="portfolio-grid">
         <article class="portfolio-card">
-          <p class="portfolio-card__role">의사 · 외국인 환자</p>
-          <h4>외국인 통역</h4>
-          <p>한국어 대화와 외국어 번역이 화면 전체를 차지합니다. 위 탭으로 서기 모드와 전환됩니다.</p>
-          <a class="portfolio-card__link" href="/doctor">통역 화면 열기</a>
+          <p class="portfolio-card__role" data-i18n="portfolio.card1.role">Clinician · patient speaks another language</p>
+          <h4 data-i18n="portfolio.card1.title">Interpreter</h4>
+          <p data-i18n="portfolio.card1.body">The Korean line and the translation fill the screen. The tabs at the top switch you over to the scribe.</p>
+          <a class="portfolio-card__link" href="/doctor" data-i18n="portfolio.card1.link">Open interpreter</a>
         </article>
         <article class="portfolio-card">
-          <p class="portfolio-card__role">환자 태블릿</p>
-          <h4>환자 화면</h4>
-          <p>환자에게 보여줄 번역과 음성만 있습니다. 의사 화면의 조작 버튼은 여기 나오지 않습니다.</p>
-          <a class="portfolio-card__link" href="/patient">환자 화면 열기</a>
+          <p class="portfolio-card__role" data-i18n="portfolio.card2.role">Patient tablet</p>
+          <h4 data-i18n="portfolio.card2.title">Patient screen</h4>
+          <p data-i18n="portfolio.card2.body">The patient only sees the translation and hears the audio. The clinician’s controls stay off this display.</p>
+          <a class="portfolio-card__link" href="/patient" data-i18n="portfolio.card2.link">Open patient screen</a>
         </article>
         <article class="portfolio-card">
-          <p class="portfolio-card__role">의사 · 한국어 진료</p>
-          <h4>AI 진료 서기</h4>
-          <p>실시간 기록은 좁게, 진료 브리핑은 넓게 둡니다. 고지와 지시는 법적 방어 기록으로 맨 위에 강조됩니다.</p>
-          <a class="portfolio-card__link" href="/scribe">서기 화면 열기</a>
+          <p class="portfolio-card__role" data-i18n="portfolio.card3.role">Clinician · visit in Korean</p>
+          <h4 data-i18n="portfolio.card3.title">AI scribe</h4>
+          <p data-i18n="portfolio.card3.body">The live transcript stays narrow. The briefing takes the rest of the screen, with warnings and instructions at the top as a record of what was explained.</p>
+          <a class="portfolio-card__link" href="/scribe" data-i18n="portfolio.card3.link">Open scribe</a>
         </article>
       </div>
-      <p class="portfolio-note">각 화면에서 브라우저 뒤로 가기를 누르면 이 안내로 돌아옵니다. 다음 환자를 보기 전에는 화면 하단의 「진료 종료 및 화면 초기화」를 누릅니다.</p>
+      <p class="portfolio-note" data-i18n="portfolio.note">Use the browser back button to return to this guide. Before the next patient, press End visit and clear the screen at the bottom.</p>
     </section>
   </main>
 </body>

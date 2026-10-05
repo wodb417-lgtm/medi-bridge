@@ -1,0 +1,30 @@
+.lang-switch {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--mb-border, #e2e8f0);
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.lang-switch button {
+  border: 0;
+  background: transparent;
+  padding: 0.4rem 0.7rem;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--mb-text-muted, #475569);
+  cursor: pointer;
+}
+
+.lang-switch button.is-active {
+  background: var(--mb-navy, #002855);
+  color: #fff;
+}
+
+.lang-switch button:focus-visible {
+  outline: 2px solid var(--mb-accent, #0056b3);
+  outline-offset: -2px;
+}

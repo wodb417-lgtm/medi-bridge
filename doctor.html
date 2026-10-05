@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediBridge · 의사 (마스터)</title>
+  <title data-i18n="doctor.title">MediBridge · Interpreter</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
   <link rel="stylesheet" href="/static/doctor-mode-nav.css" />
+  <link rel="stylesheet" href="/static/ui-lang.css" />
+  <script src="/static/ui-lang.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="/static/medibridge-ws.js"></script>
   <script src="/static/clinic-audio.js"></script>
@@ -21,85 +23,85 @@
         <div class="brand-icon" aria-hidden="true">+</div>
         <div>
           <h1>MediBridge</h1>
-          <p>외국인 통역 · 진료실 통제</p>
+          <p data-i18n="doctor.brand">Interpreter · clinic controls</p>
         </div>
       </div>
       <div class="header__actions">
-<button type="button" id="btn-settings" class="settings-btn" aria-label="단축키 설정" title="단축키 설정">
+<button type="button" id="btn-settings" class="settings-btn" data-i18n-attr="aria-label:doctor.settings|title:doctor.settings" aria-label="Shortcut settings" title="Shortcut settings">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
           </svg>
         </button>
         <div id="connection-status" class="status-badge status-badge--warn">
           <span class="status-dot" aria-hidden="true"></span>
-          <span id="connection-status-text">서버 연결 중…</span>
+          <span id="connection-status-text" data-i18n="status.connecting">Connecting…</span>
         </div>
       </div>
     </header>
 
-    <nav class="doctor-gnb" aria-label="의사 모드 선택">
+    <nav class="doctor-gnb" data-i18n-attr="aria-label:nav.aria" aria-label="Clinician mode">
       <div class="doctor-gnb__inner">
-        <a href="/doctor" class="doctor-gnb__tab doctor-gnb__tab--active">🌍 외국인 통역 모드</a>
-        <a href="/scribe" class="doctor-gnb__tab">📝 AI 진료 서기 모드</a>
+        <a href="/doctor" class="doctor-gnb__tab doctor-gnb__tab--active" data-i18n="nav.interpreter">Interpreter</a>
+        <a href="/scribe" class="doctor-gnb__tab" data-i18n="nav.scribe">AI scribe</a>
       </div>
     </nav>
 
     <div id="mic-alert" class="mic-alert" role="alert" aria-live="assertive">
-      마이크를 연결하고 권한을 허용해 주세요
+      <span data-i18n="doctor.mic">Allow the microphone to continue.</span>
     </div>
 
     <div id="doctor-workspace" class="doctor-workspace doctor-workspace--translate-only">
       <div class="doctor-workspace__main doctor-workspace__main--full">
       <div id="panels-patient-remote" class="doctor-patient-remote-overlay doctor-main-overlay" aria-hidden="true">
         <div class="doctor-patient-remote-overlay__content">
-          <span class="doctor-patient-remote-overlay__text">환자 태블릿 녹음 중</span>
+          <span class="doctor-patient-remote-overlay__text" data-i18n="common.patientRecording">Patient tablet is recording</span>
           <span class="doctor-patient-remote-overlay__dots" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
       </div>
       <div id="panels-processing" class="processing-overlay doctor-main-overlay" aria-hidden="true">
         <div class="processing-overlay__content">
-          <span class="processing-overlay__text">번역 중</span>
+          <span class="processing-overlay__text" data-i18n="common.translating">Translating</span>
           <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
         </div>
       </div>
     <div class="lang-bar">
-      <span class="lang-bar__label">수동 언어 설정</span>
-      <span class="lang-bar__hint">선택 즉시 환자 언어가 고정됩니다 (자동 감지 전에도 사용 가능)</span>
-      <select id="language-select" class="language-select language-select--prominent" aria-label="수동 언어 설정">
-        <option value="" selected disabled>언어를 선택하세요</option>
+      <span class="lang-bar__label" data-i18n="doctor.langLabel">Patient language</span>
+      <span class="lang-bar__hint" data-i18n="doctor.langHint">The language locks as soon as you choose it, even before auto-detect.</span>
+      <select id="language-select" class="language-select language-select--prominent" data-i18n-attr="aria-label:doctor.langAria" aria-label="Patient language">
+        <option value="" selected disabled data-i18n="doctor.langPlaceholder">Choose a language</option>
       </select>
     </div>
 
-    <section class="doctor-stage" aria-label="실시간 통역 스크립트">
+    <section class="doctor-stage" data-i18n-attr="aria-label:doctor.stageAria" aria-label="Live interpretation">
       <div class="doctor-script-scroll">
         <main class="panels-processing-wrap panels-processing-wrap--primary">
           <div class="panels">
-            <section class="panel panel--doctor" aria-label="의사 한국어">
+            <section class="panel panel--doctor" data-i18n-attr="aria-label:doctor.panelDoctorAria" aria-label="Clinician, Korean">
               <div class="panel-header">
-                <h2 class="panel-title">한국어 · 의사</h2>
-                <p class="panel-subtitle">진료실 대화의 한국어 기록</p>
+                <h2 class="panel-title" data-i18n="doctor.panelDoctor">Korean · clinician</h2>
+                <p class="panel-subtitle" data-i18n="doctor.panelDoctorSub">Korean record of what was said</p>
               </div>
               <div class="translation-area">
                 <div class="translation-box">
-                  <p id="doctor-text" class="translation-text is-empty">번역된 내용이 여기에 표시됩니다</p>
+                  <p id="doctor-text" class="translation-text is-empty">The Korean line will show up here</p>
                 </div>
               </div>
             </section>
 
-            <section class="panel panel--patient" aria-label="환자 외국어 미리보기">
+            <section class="panel panel--patient" data-i18n-attr="aria-label:doctor.panelPatientAria" aria-label="Patient translation preview">
               <div class="panel-header">
                 <div class="panel-header-row">
-                  <h2 id="patient-title" class="panel-title">외국어 · 환자</h2>
+                  <h2 id="patient-title" class="panel-title" data-i18n="doctor.panelPatient">Other language · patient</h2>
                   <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
-                    <span class="detected-lang-badge__label">현재 감지된 언어:</span>
+                    <span class="detected-lang-badge__label" data-i18n="doctor.detectedLabel">Detected language:</span>
                     <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
                   </div>
                 </div>
-                <p id="patient-subtitle" class="panel-subtitle">환자 태블릿에 표시될 번역문</p>
+                <p id="patient-subtitle" class="panel-subtitle" data-i18n="doctor.panelPatientSub">What the patient tablet will show</p>
               </div>
               <div class="translation-area">
                 <div class="translation-box">
-                  <p id="patient-text" class="translation-text is-empty">환자 화면에 표시될 번역문</p>
+                  <p id="patient-text" class="translation-text is-empty">The translation for the patient screen</p>
                 </div>
               </div>
             </section>
@@ -111,29 +113,29 @@
     <div class="doctor-controls-dock">
     <footer class="master-controls">
       <div class="master-controls__buttons">
-        <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="의사 말하기" aria-pressed="false">
+        <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="Speak as clinician" data-i18n-attr="data-default-label:doctor.speak" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
           </svg>
           <span class="speak-btn__text">
-            <span class="speak-btn__label">의사 말하기</span>
+            <span class="speak-btn__label" data-i18n="doctor.speak">Speak as clinician</span>
             <span id="doctor-shortcut-hint" class="shortcut-hint" aria-hidden="true">Space</span>
           </span>
         </button>
-        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="환자 말하기" data-recording-label="말하기 종료" aria-pressed="false">
+        <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="Speak as patient" data-recording-label="Stop speaking" data-i18n-attr="data-default-label:doctor.patientSpeak|data-recording-label:doctor.stop" aria-pressed="false">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
           </svg>
           <span class="speak-btn__text">
-            <span class="speak-btn__label">환자 말하기</span>
+            <span class="speak-btn__label" data-i18n="doctor.patientSpeak">Speak as patient</span>
             <span id="patient-shortcut-hint" class="shortcut-hint" aria-hidden="true">Alt</span>
           </span>
         </button>
       </div>
       <div class="master-controls__actions master-controls__actions--session-end">
-        <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost reset-btn--session-end" aria-label="진료 종료 및 화면 초기화">
+        <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost reset-btn--session-end" data-i18n-attr="aria-label:reset.aria" aria-label="End visit and clear the screen">
           <i class="fas fa-redo-alt" aria-hidden="true"></i>
-          <span>🔄 진료 종료 및 화면 초기화</span>
+          <span data-i18n="reset.idle">End visit and clear the screen</span>
         </button>
       </div>
     </footer>
@@ -144,19 +146,19 @@
     <div id="settings-modal" class="settings-modal" aria-hidden="true" role="dialog" aria-labelledby="settings-modal-title">
       <div class="settings-modal__backdrop" data-close-modal></div>
       <div class="settings-modal__panel">
-        <h2 id="settings-modal-title" class="settings-modal__title">마이크 단축키 설정</h2>
-        <p class="settings-modal__desc">입력칸을 클릭한 뒤 원하는 키를 누르세요.</p>
+        <h2 id="settings-modal-title" class="settings-modal__title" data-i18n="doctor.settingsTitle">Microphone shortcuts</h2>
+        <p class="settings-modal__desc" data-i18n="doctor.settingsDesc">Click a field, then press the key you want.</p>
         <div class="settings-modal__field">
-          <label class="settings-modal__label" for="shortcut-doctor-input">의사 말하기 단축키</label>
+          <label class="settings-modal__label" for="shortcut-doctor-input" data-i18n="doctor.shortcutDoctor">Clinician shortcut</label>
           <input type="text" id="shortcut-doctor-input" class="shortcut-input" readonly value="Spacebar" />
         </div>
         <div class="settings-modal__field">
-          <label class="settings-modal__label" for="shortcut-patient-input">환자 말하기 단축키</label>
+          <label class="settings-modal__label" for="shortcut-patient-input" data-i18n="doctor.shortcutPatient">Patient shortcut</label>
           <input type="text" id="shortcut-patient-input" class="shortcut-input" readonly value="Alt" />
         </div>
         <div class="settings-modal__actions">
-          <button type="button" id="btn-settings-save" class="settings-modal__btn settings-modal__btn--primary">저장</button>
-          <button type="button" id="btn-settings-close" class="settings-modal__btn settings-modal__btn--secondary" data-close-modal>닫기</button>
+          <button type="button" id="btn-settings-save" class="settings-modal__btn settings-modal__btn--primary" data-i18n="doctor.save">Save</button>
+          <button type="button" id="btn-settings-close" class="settings-modal__btn settings-modal__btn--secondary" data-close-modal data-i18n="doctor.close">Close</button>
         </div>
       </div>
     </div>
@@ -222,25 +224,47 @@
       var capturingInput = null;
 
       var languages = [
-        { code: "en", labelKo: "영어", labelFull: "영어 (English)", subtitle: "Speak and it will be translated for the doctor" },
-        { code: "vi", labelKo: "베트남어", labelFull: "베트남어 (Tiếng Việt)", subtitle: "Nói và nội dung sẽ được dịch cho bác sĩ" },
-        { code: "zh", labelKo: "중국어", labelFull: "중국어 (中文)", subtitle: "说话内容将翻译给医生" },
-        { code: "ja", labelKo: "일본어", labelFull: "일본어 (日本語)", subtitle: "お話しください。医師向けに翻訳されます" },
-        { code: "th", labelKo: "태국어", labelFull: "태국어 (ภาษาไทย)", subtitle: "พูดแล้วจะแปลให้แพทย์ฟัง" },
-        { code: "uz", labelKo: "우즈베크어", labelFull: "우즈베크어 (O'zbek)", subtitle: "Gapiring, shifokor uchun tarjima qilinadi" },
-        { code: "id", labelKo: "인도네시아어", labelFull: "인도네시아어 (Bahasa Indonesia)", subtitle: "Bicara dan akan diterjemahkan untuk dokter" },
-        { code: "km", labelKo: "캄보디아어", labelFull: "캄보디아어 (ខ្មែរ)", subtitle: "និយាយ ហើយនឹងបកប្រែទៅឱ្យគ្រូពេទ្យ" },
-        { code: "ne", labelKo: "네팔어", labelFull: "네팔어 (नेपाली)", subtitle: "बोल्नुहोस्, डाक्टरका लागि अनुवाद हुनेछ" },
-        { code: "tl", labelKo: "타갈로그어", labelFull: "타갈로그어 (Tagalog)", subtitle: "Magsalita at isasalin ito para sa doktor" },
-        { code: "ru", labelKo: "러시아어", labelFull: "러시아어 (Русский)", subtitle: "Говорите — перевод будет показан врачу" },
+        { code: "en", labelKo: "영어", labelEn: "English", native: "English", subtitle: "Speak and it will be translated for the doctor" },
+        { code: "vi", labelKo: "베트남어", labelEn: "Vietnamese", native: "Tiếng Việt", subtitle: "Nói và nội dung sẽ được dịch cho bác sĩ" },
+        { code: "zh", labelKo: "중국어", labelEn: "Chinese", native: "中文", subtitle: "说话内容将翻译给医生" },
+        { code: "ja", labelKo: "일본어", labelEn: "Japanese", native: "日本語", subtitle: "お話しください。医師向けに翻訳されます" },
+        { code: "th", labelKo: "태국어", labelEn: "Thai", native: "ภาษาไทย", subtitle: "พูดแล้วจะแปลให้แพทย์ฟัง" },
+        { code: "uz", labelKo: "우즈베크어", labelEn: "Uzbek", native: "Oʻzbek", subtitle: "Gapiring, shifokor uchun tarjima qilinadi" },
+        { code: "id", labelKo: "인도네시아어", labelEn: "Indonesian", native: "Bahasa Indonesia", subtitle: "Bicara dan akan diterjemahkan untuk dokter" },
+        { code: "km", labelKo: "캄보디아어", labelEn: "Khmer", native: "ភាសាខ្មែរ", subtitle: "និយាយ ហើយនឹងបកប្រែទៅឱ្យគ្រូពេទ្យ" },
+        { code: "ne", labelKo: "네팔어", labelEn: "Nepali", native: "नेपाली", subtitle: "बोल्नुहोस्, डाक्टरका लागि अनुवाद हुनेछ" },
+        { code: "tl", labelKo: "타갈로그어", labelEn: "Tagalog", native: "Tagalog", subtitle: "Magsalita at isasalin ito para sa doktor" },
+        { code: "ru", labelKo: "러시아어", labelEn: "Russian", native: "Русский", subtitle: "Говорите — перевод будет показан врачу" },
       ];
 
-      languages.forEach(function (lang) {
-        var option = document.createElement("option");
-        option.value = lang.code;
-        option.textContent = lang.labelFull;
-        languageSelect.appendChild(option);
-      });
+      var connectionStatusKey = "status.connecting";
+      var connectionStatusState = "warn";
+      var lastManualLock = false;
+
+      function optionLabel(lang) {
+        if (MbLang.get() === "en") {
+          return lang.code === "en" ? lang.labelEn : lang.labelEn + " (" + lang.native + ")";
+        }
+        return lang.labelKo + " (" + lang.native + ")";
+      }
+
+      function displayLangName(lang) {
+        return MbLang.get() === "en" ? lang.labelEn : lang.labelKo;
+      }
+
+      function fillLanguageOptions() {
+        var current = languageSelect.value;
+        while (languageSelect.options.length > 1) languageSelect.remove(1);
+        languages.forEach(function (lang) {
+          var option = document.createElement("option");
+          option.value = lang.code;
+          option.textContent = optionLabel(lang);
+          languageSelect.appendChild(option);
+        });
+        if (current) languageSelect.value = current;
+      }
+
+      fillLanguageOptions();
 
       function getLangByCode(code) {
         for (var i = 0; i < languages.length; i++) {
@@ -249,11 +273,13 @@
         return languages[0];
       }
 
-      function setConnectionStatus(state, text) {
+      function setConnectionStatus(state, key) {
+        connectionStatusState = state;
+        connectionStatusKey = key;
         connectionStatus.className = "status-badge";
         if (state === "warn") connectionStatus.classList.add("status-badge--warn");
         else if (state === "error") connectionStatus.classList.add("status-badge--error");
-        connectionStatusText.textContent = text;
+        connectionStatusText.textContent = MbLang.t(key);
       }
 
       function setDetectedBadge(state, valueText) {
@@ -264,20 +290,21 @@
       function applyUnlockedUI() {
         isLanguageLocked = false;
         sessionLangCode = null;
-        patientTitle.textContent = "환자 (자동 감지 대기)";
-        patientSubtitle.textContent = "환자 모니터: 다국어 대기 화면";
-        if (!isRecording && !isProcessing) setDetectedBadge("idle", "자동 감지");
+        patientTitle.textContent = MbLang.t("doctor.patientTitleWait");
+        patientSubtitle.textContent = MbLang.t("doctor.patientSubWait");
+        if (!isRecording && !isProcessing) setDetectedBadge("idle", MbLang.t("doctor.auto"));
       }
 
-      function applyLockedLanguageUI(code, labelKo, isManual) {
+      function applyLockedLanguageUI(code, _labelIgnored, isManual) {
         isLanguageLocked = true;
         sessionLangCode = code;
+        lastManualLock = !!isManual;
         var lang = getLangByCode(code);
-        patientTitle.textContent = "환자 (" + labelKo + ")";
-        patientSubtitle.textContent = isManual
-          ? lang.subtitle + " · 수동 고정"
-          : lang.subtitle + " · 음성 감지";
-        setDetectedBadge(isManual ? "manual" : "detected", labelKo);
+        var name = displayLangName(lang);
+        patientTitle.textContent = MbLang.t("doctor.patientTitleLocked").replace("{lang}", name);
+        patientSubtitle.textContent =
+          lang.subtitle + " · " + MbLang.t(isManual ? "doctor.manualLock" : "doctor.detectedLock");
+        setDetectedBadge(isManual ? "manual" : "detected", name);
       }
 
       function onLanguageSelectChange() {
@@ -286,7 +313,7 @@
         connectWebSocket().then(function () {
           sendWs({ type: "set_language", lang_code: code });
         }).catch(function () {
-          alert("서버에 연결할 수 없습니다.");
+          alert(MbLang.t("status.failed"));
         });
       }
 
@@ -307,8 +334,8 @@
       function clearAllTexts() {
         setText(doctorText, "");
         setText(patientText, "");
-        doctorText.textContent = "번역된 내용이 여기에 표시됩니다";
-        patientText.textContent = "환자 화면에 표시될 번역문";
+        doctorText.textContent = MbLang.t("doctor.placeholder");
+        patientText.textContent = MbLang.t("doctor.patientPlaceholder");
         doctorText.classList.add("is-empty");
         patientText.classList.add("is-empty");
         languageSelect.selectedIndex = 0;
@@ -353,7 +380,7 @@
           setPatientRecordingButton(btnPatient, true);
         }
         showPatientRemoteOverlay();
-        setDetectedBadge("detecting", "환자가 직접 말하는 중…");
+        setDetectedBadge("detecting", MbLang.t("doctor.patientSpeaking"));
       }
 
       function clearPatientSpeakMirror() {
@@ -373,8 +400,8 @@
         var labelEl = btn.querySelector(".speak-btn__label");
         if (labelEl) {
           labelEl.textContent = recording
-            ? "녹음 중..."
-            : btn.getAttribute("data-default-label") || labelEl.textContent;
+            ? MbLang.t("doctor.recording")
+            : btn.getAttribute("data-default-label") || MbLang.t("doctor.speak");
         }
       }
 
@@ -385,10 +412,10 @@
         if (!labelEl) return;
         if (recording) {
           labelEl.textContent =
-            btn.getAttribute("data-recording-label") || "말하기 종료";
+            btn.getAttribute("data-recording-label") || MbLang.t("doctor.stop");
         } else {
           labelEl.textContent =
-            btn.getAttribute("data-default-label") || "환자 말하기";
+            btn.getAttribute("data-default-label") || MbLang.t("doctor.patientSpeak");
         }
       }
 
@@ -423,13 +450,13 @@
         if (wsConnectPromise) return wsConnectPromise;
 
         wsConnectPromise = new Promise(function (resolve, reject) {
-          setConnectionStatus("warn", "서버 연결 중…");
+          setConnectionStatus("warn", "status.connecting");
           var socket = new WebSocket(WS_URL);
           socket.onopen = function () {
             ws = socket;
             wsConnectPromise = null;
             sendDoctorMeta({ type: "register", role: "doctor" });
-            setConnectionStatus("ok", "서버 연결됨");
+            setConnectionStatus("ok", "status.connected");
             resolve(socket);
           };
 
@@ -438,14 +465,14 @@
           };
 
           socket.onerror = function () {
-            setConnectionStatus("error", "서버 연결 실패");
+            setConnectionStatus("error", "status.failed");
             reject(new Error("WebSocket connection failed"));
           };
 
           socket.onclose = function () {
             ws = null;
             wsConnectPromise = null;
-            setConnectionStatus("warn", "서버 연결 끊김 · 재연결 중…");
+            setConnectionStatus("warn", "status.reconnecting");
             setTimeout(function () {
               connectWebSocket().catch(function () {});
             }, 2000);
@@ -457,6 +484,28 @@
 
       connectWebSocket().catch(function () {});
       checkMicrophoneAccess().catch(function () {});
+
+      MbLang.onChange(function () {
+        fillLanguageOptions();
+        if (isLanguageLocked && sessionLangCode) {
+          applyLockedLanguageUI(sessionLangCode, null, lastManualLock);
+        } else {
+          applyUnlockedUI();
+        }
+        if (doctorText.classList.contains("is-empty")) {
+          doctorText.textContent = MbLang.t("doctor.placeholder");
+        }
+        if (patientText.classList.contains("is-empty")) {
+          patientText.textContent = MbLang.t("doctor.patientPlaceholder");
+        }
+        if (btnDoctor) {
+          setRecordingButton(btnDoctor, isRecording && activeSpeaker === "doctor");
+        }
+        if (btnPatient) {
+          setPatientRecordingButton(btnPatient, isPatientRecording || patientSpeakMirrored);
+        }
+        setConnectionStatus(connectionStatusState, connectionStatusKey);
+      });
 
       function blobToBase64(blob) {
         return new Promise(function (resolve, reject) {
@@ -479,7 +528,7 @@
       /** 메타데이터만 JSON 텍스트 프레임으로 전송 (오디오와 절대 혼합하지 않음) */
       function sendDoctorMeta(payload) {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
-          throw new Error("서버와 연결되어 있지 않습니다.");
+          throw new Error(MbLang.t("status.offline"));
         }
         ws.send(JSON.stringify(payload));
       }
@@ -495,7 +544,7 @@
       /** 녹음 완료 후 multipart/form-data POST (오디오·메타 완전 분리) */
       function submitDoctorAudioViaForm(audioBlob) {
         if (!audioBlob || audioBlob.size === 0) {
-          return Promise.reject(new Error("녹음된 오디오가 없습니다."));
+          return Promise.reject(new Error(MbLang.t("status.noAudio")));
         }
         var formData = new FormData();
         var ext = extensionForMime(doctorRecordingMime);
@@ -517,13 +566,13 @@
                   ? detail
                   : Array.isArray(detail)
                     ? detail.map(function (d) { return d.msg || d; }).join(", ")
-                    : res.statusText || "전송 실패";
+                    : res.statusText || MbLang.t("status.sendFailed");
               throw new Error(msg);
             }).catch(function (parseErr) {
               if (parseErr.message && parseErr.message !== "Unexpected token") {
                 throw parseErr;
               }
-              throw new Error(res.statusText || "전송 실패");
+              throw new Error(res.statusText || MbLang.t("status.sendFailed"));
             });
           }
           return res.json();
@@ -637,7 +686,7 @@
               activeSpeaker = null;
               activeButton = null;
               hideProcessingOverlay();
-              alert(err.message || "전송에 실패했습니다.");
+              alert(err.message || MbLang.t("doctor.sendFailed"));
             });
         };
 
@@ -650,7 +699,7 @@
         activeButton = btn;
         setPatientRecordingButton(btn, true);
         showPatientRemoteOverlay();
-        setDetectedBadge("detecting", "환자 태블릿 녹음 중…");
+        setDetectedBadge("detecting", MbLang.t("common.patientRecording"));
         sendDoctorStateChange("patient_speaking", "patient")
           .catch(function () {
             isPatientRecording = false;
@@ -658,7 +707,7 @@
             activeButton = null;
             hidePatientRemoteOverlay();
             setPatientRecordingButton(btn, false);
-            alert("서버에 연결할 수 없습니다.");
+            alert(MbLang.t("status.failed"));
           });
       }
 
@@ -667,9 +716,9 @@
         isPatientRecording = false;
         hidePatientRemoteOverlay();
         setPatientRecordingButton(btn, false);
-        setDetectedBadge("detecting", "전송 대기…");
+        setDetectedBadge("detecting", MbLang.t("status.sending"));
         sendDoctorStateChange("processing", "patient").catch(function (err) {
-          alert(err.message || "전송에 실패했습니다.");
+          alert(err.message || MbLang.t("doctor.sendFailed"));
         });
         activeSpeaker = null;
         activeButton = null;
@@ -715,7 +764,7 @@
           if (btnPatient) setPatientRecordingButton(btnPatient, false);
           isProcessing = true;
           showProcessingOverlay();
-          setDetectedBadge("detecting", "처리 중…");
+          setDetectedBadge("detecting", MbLang.t("status.working"));
           return;
         }
 
@@ -762,7 +811,7 @@
             }
             isProcessing = true;
             showProcessingOverlay();
-            setDetectedBadge("detecting", "처리 중…");
+            setDetectedBadge("detecting", MbLang.t("status.working"));
             return;
           }
           if (msg.status === "processing" && msg.speaker === "doctor") {
@@ -790,7 +839,7 @@
           hidePatientRemoteOverlay();
           if (btnPatient) setPatientRecordingButton(btnPatient, false);
           hideProcessingOverlay();
-          alert(msg.message || "처리 중 오류가 발생했습니다.");
+          alert(msg.message || MbLang.t("doctor.processError"));
           return;
         }
 
@@ -828,7 +877,7 @@
           if (isMicError(err)) {
             showMicAlert();
           } else {
-            alert(err.message || "마이크를 사용할 수 없습니다. 브라우저 권한을 확인해 주세요.");
+            alert(err.message || MbLang.t("doctor.micBlocked"));
           }
         });
       }
@@ -1004,7 +1053,7 @@
         shortcutDoctorInput.classList.toggle("is-capturing", input === shortcutDoctorInput);
         shortcutPatientInput.classList.toggle("is-capturing", input === shortcutPatientInput);
         input.focus();
-        input.value = "키를 눌러 주세요…";
+        input.value = MbLang.get() === "en" ? "Press a key…" : "키를 눌러 주세요…";
       }
 
       applyShortcuts(loadShortcutsFromStorage());
@@ -1049,11 +1098,11 @@
         };
 
         btnReset.onclick = function () {
-          if (!confirm("현재 진료 기록을 초기화하시겠습니까?")) return;
+          if (!confirm(MbLang.t("doctor.resetConfirm"))) return;
           connectWebSocket().then(function () {
             sendWs({ type: "reset" });
           }).catch(function () {
-            alert("서버에 연결할 수 없습니다.");
+            alert(MbLang.t("status.failed"));
           });
         };
 

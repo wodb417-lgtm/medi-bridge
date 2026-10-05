@@ -3,11 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MediBridge · 환자 (디스플레이)</title>
+  <title data-i18n="patient.title">MediBridge · Patient display</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
   <link rel="stylesheet" href="/static/medical-minimal.css" />
   <link rel="stylesheet" href="/static/patient-universal.css" />
+  <link rel="stylesheet" href="/static/ui-lang.css" />
+  <script src="/static/ui-lang.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="/static/medibridge-ws.js"></script>
   <script src="/static/clinic-audio.js"></script>
@@ -19,42 +21,42 @@
         <div class="brand-icon" aria-hidden="true">+</div>
         <div>
           <h1>MediBridge</h1>
-          <p>환자 디스플레이 · 읽기 전용</p>
+          <p data-i18n="patient.brand">Patient display · read only</p>
         </div>
       </div>
       <div id="connection-status" class="status-badge status-badge--warn">
         <span class="status-dot" aria-hidden="true"></span>
-        <span id="connection-status-text">서버 연결 중…</span>
+        <span id="connection-status-text" data-i18n="status.connecting">Connecting…</span>
       </div>
     </header>
     <p id="patient-error-toast" class="patient-error-toast" role="status" aria-live="assertive" hidden></p>
 
     <main class="panels panels--single">
-      <section class="panel panel--patient display-main" aria-label="환자 번역 화면">
+      <section class="panel panel--patient display-main" data-i18n-attr="aria-label:patient.screenAria" aria-label="Patient translation">
         <div class="display-stage">
           <div id="status-force-layer" class="status-force-layer" style="display: none;" aria-live="assertive">
-            <div id="status-container" class="status-force-panel" style="display: none;" role="status" aria-label="환자 말하기">
+            <div id="status-container" class="status-force-panel" style="display: none;" role="status" data-i18n-attr="aria-label:patient.speakNow" aria-label="Speak now">
               <div class="status-force-panel__icon status-force-panel__icon--mic" aria-hidden="true">
                 <i class="fas fa-microphone"></i>
               </div>
-              <p class="status-force-panel__title">지금 말씀하세요</p>
-              <p class="status-force-panel__sub">Listening...</p>
+              <p class="status-force-panel__title" data-i18n="patient.speakNow">Speak now</p>
+              <p class="status-force-panel__sub" data-i18n="patient.listening">Listening</p>
             </div>
-            <div id="status-container-processing" class="status-force-panel" style="display: none;" role="status" aria-label="번역 처리 중">
+            <div id="status-container-processing" class="status-force-panel" style="display: none;" role="status" data-i18n-attr="aria-label:patient.translating" aria-label="Translating">
               <div class="status-force-panel__icon status-force-panel__icon--spin" aria-hidden="true">
                 <i class="fas fa-spinner fa-spin"></i>
               </div>
-              <p class="status-force-panel__title">번역 중</p>
-              <p class="status-force-panel__sub">잠시만 기다려 주세요</p>
+              <p class="status-force-panel__title" data-i18n="patient.translating">Translating</p>
+              <p class="status-force-panel__sub" data-i18n="patient.oneMoment">One moment</p>
             </div>
           </div>
 
           <div id="audio-unlock-overlay" class="audio-unlock-overlay" aria-hidden="false">
             <div class="audio-unlock-overlay__panel">
-              <p class="audio-unlock-overlay__title">MediBridge 환자 모니터</p>
-              <p class="audio-unlock-overlay__desc">출근 후 한 번만 눌러 주세요. 스피커·마이크 권한이 함께 활성화되며, 이후 번역 음성이 자동 재생됩니다.</p>
-              <button type="button" id="btn-audio-unlock" class="audio-unlock-btn">
-                진료실 스피커·마이크 연결하기
+              <p class="audio-unlock-overlay__title" data-i18n="patient.unlockTitle">MediBridge patient monitor</p>
+              <p class="audio-unlock-overlay__desc" data-i18n="patient.unlockDesc">Tap once at the start of the day. This turns on the speaker and microphone, and translations play on their own after that.</p>
+              <button type="button" id="btn-audio-unlock" class="audio-unlock-btn" data-i18n="patient.unlock">
+                Connect speaker and microphone
               </button>
             </div>
           </div>
@@ -77,18 +79,18 @@
                 </div>
               </div>
             </div>
-            <p id="ui-hint-text" class="ui-hint">READY · 대기</p>
+            <p id="ui-hint-text" class="ui-hint" data-i18n="patient.hint.ready">READY · Waiting</p>
           </div>
 
           <div id="display-processing" class="processing-overlay" aria-hidden="true">
             <div class="processing-overlay__content">
-              <span class="processing-overlay__text">번역 중</span>
+              <span class="processing-overlay__text" data-i18n="common.translating">Translating</span>
               <span class="processing-dots" aria-hidden="true"><span></span><span></span><span></span></span>
             </div>
           </div>
           <div id="recording-prompt" class="patient-recording-prompt" aria-hidden="true">
-            <span class="patient-recording-prompt__text">지금 말씀하세요</span>
-            <span class="patient-recording-prompt__sub">의사 선생님이 듣고 있습니다</span>
+            <span class="patient-recording-prompt__text" data-i18n="patient.speakNow">Speak now</span>
+            <span class="patient-recording-prompt__sub" data-i18n="patient.promptSub">The clinician is listening</span>
           </div>
           <!-- 다국어 대기 화면 -->
           <div id="welcome-screen" class="welcome-screen" aria-hidden="false">
@@ -98,7 +100,7 @@
                   <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
                 </svg>
               </div>
-              <p class="welcome-title">편하신 언어로 증상을 말씀해 주세요</p>
+              <p class="welcome-title" data-i18n="patient.welcome">Tell us your symptoms in whichever language is easiest.</p>
               <ul class="welcome-messages">
                 <li>
                   <span class="welcome-messages__lang">English</span>
@@ -133,15 +135,15 @@
             <div class="panel-header panel-header--compact">
               <div class="panel-header-row">
                 <div id="detected-lang-badge" class="detected-lang-badge detected-lang-badge--idle" role="status" aria-live="polite">
-                  <span class="detected-lang-badge__label">현재 감지된 언어:</span>
+                  <span class="detected-lang-badge__label" data-i18n="patient.detectedLabel">Detected language:</span>
                   <span id="detected-lang-value" class="detected-lang-badge__value">-</span>
                 </div>
               </div>
             </div>
             <div class="subtitle-stage">
-              <div id="subtitle-body" class="subtitle-body" role="region" aria-live="polite" aria-label="번역 자막">
+              <div id="subtitle-body" class="subtitle-body" role="region" aria-live="polite" data-i18n-attr="aria-label:patient.subtitleAria" aria-label="Translation">
                 <p id="subtitle-speaker" class="subtitle-speaker" aria-hidden="true"></p>
-                <p id="patient-text" class="subtitle-text is-empty">번역된 내용이 여기에 표시됩니다</p>
+                <p id="patient-text" class="subtitle-text is-empty">The translation will show up here</p>
                 <div class="subtitle-waveform" aria-hidden="true">
                   <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
                 </div>
@@ -153,12 +155,12 @@
     </main>
 
     <footer class="patient-self-speak" id="patient-self-speak-bar" hidden>
-      <button type="button" id="patient-speak-btn" class="speak-btn speak-btn--patient" data-default-label="말하기 시작" data-recording-label="말하기 종료" aria-pressed="false">
+      <button type="button" id="patient-speak-btn" class="speak-btn speak-btn--patient" data-default-label="Start speaking" data-recording-label="Stop speaking" data-i18n-attr="data-default-label:patient.start|data-recording-label:patient.stop" aria-pressed="false">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
         </svg>
         <span class="speak-btn__text">
-          <span class="speak-btn__label">말하기 시작</span>
+          <span class="speak-btn__label" data-i18n="patient.start">Start speaking</span>
         </span>
       </button>
     </footer>
@@ -188,14 +190,20 @@
       var statusContainerMic = document.getElementById("status-container");
       var statusContainerProcessing = document.getElementById("status-container-processing");
 
-      var PATIENT_UI_HINTS = {
-        ready: "READY · 대기",
-        recording: "DOCTOR · 의사가 말씀하시는 중",
-        patient_speaking: "지금 말씀하세요 (Listening...)",
-        processing: "번역 및 음성 생성 중",
-        processing_patient: "의사 선생님에게 번역 중입니다...",
-        subtitle: "",
+      var HINT_KEYS = {
+        ready: "patient.hint.ready",
+        recording: "patient.hint.recording",
+        patient_speaking: "patient.hint.patient_speaking",
+        processing: "patient.hint.processing",
+        processing_patient: "patient.hint.processing_patient",
       };
+      var currentPatientUiKey = "ready";
+      var currentHintKey = "ready";
+
+      function hintText(key) {
+        var dictKey = HINT_KEYS[key];
+        return dictKey ? MbLang.t(dictKey) : "";
+      }
 
       var ACTIVE_PATIENT_UI_STATES = {
         patient_speaking: true,
@@ -203,9 +211,11 @@
         processing: true,
       };
 
-      function setPatientUiState(state, hintOverride) {
+      function setPatientUiState(state, hintKey) {
         if (!patientUniversalStage) return;
         var key = state || "ready";
+        currentPatientUiKey = key;
+        currentHintKey = hintKey || key;
         patientUniversalStage.setAttribute("data-ui-state", key);
         var isLive = !!ACTIVE_PATIENT_UI_STATES[key];
         patientUniversalStage.classList.toggle("is-live-status", isLive);
@@ -214,8 +224,7 @@
           recordingIcon.classList.toggle("ui-icon--pulse", isLive && key === "patient_speaking");
         }
         if (uiHintText) {
-          uiHintText.textContent =
-            hintOverride != null ? hintOverride : PATIENT_UI_HINTS[key] || "";
+          uiHintText.textContent = hintText(currentHintKey);
         }
       }
 
@@ -376,10 +385,7 @@
             patientUniversalStage.classList.remove("is-audio-playing");
           }
 
-          setPatientUiState(
-            "patient_speaking",
-            hintOverride != null ? hintOverride : PATIENT_UI_HINTS.patient_speaking
-          );
+          setPatientUiState("patient_speaking", "patient_speaking");
           forceStatusDisplayOverride("patient_speaking", "patient");
           updatePatientSelfSpeakAvailability();
         } catch (err) {
@@ -499,7 +505,7 @@
         }
 
         if (status === "patient_speaking" || (status === "recording" && speaker === "patient")) {
-          nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
+          nukePatientSpeaking();
           forceStatusDisplayOverride(status, speaker);
           return;
         }
@@ -511,7 +517,7 @@
           isRecording = true;
           hideProcessingOverlayOnly();
           hideRecordingPromptOnly();
-          setPatientUiState("recording", PATIENT_UI_HINTS.recording);
+          setPatientUiState("recording", "recording");
           forceStatusDisplayOverride(status, speaker);
           return;
         }
@@ -520,12 +526,11 @@
           isProcessing = true;
           isRecording = false;
           hideRecordingPromptOnly();
-          var processingHint =
-            speaker === "patient"
-              ? PATIENT_UI_HINTS.processing_patient
-              : PATIENT_UI_HINTS.processing;
-          setPatientUiState("processing", processingHint);
-          if (languageLocked) setDetectedBadge("detecting", "처리 중…");
+          setPatientUiState(
+            "processing",
+            speaker === "patient" ? "processing_patient" : "processing"
+          );
+          if (languageLocked) setDetectedBadge("detecting", MbLang.t("patient.processing"));
           updatePatientSelfSpeakAvailability();
           forceStatusDisplayOverride(status, speaker);
           return;
@@ -684,7 +689,7 @@
       function sendPatientWs(payload) {
         return connectWebSocket().then(function (socket) {
           if (!socket || socket.readyState !== WebSocket.OPEN) {
-            throw new Error("서버와 연결되어 있지 않습니다.");
+            throw new Error(MbLang.t("status.offline"));
           }
           socket.send(JSON.stringify(payload));
         });
@@ -706,7 +711,7 @@
 
       function submitPatientAudioViaForm(audioBlob) {
         if (!audioBlob || audioBlob.size === 0) {
-          return Promise.reject(new Error("녹음된 오디오가 없습니다."));
+          return Promise.reject(new Error(MbLang.t("status.noAudio")));
         }
         var formData = new FormData();
         var ext = extensionForMime(patientRecordingMime);
@@ -724,13 +729,13 @@
                   ? detail
                   : Array.isArray(detail)
                     ? detail.map(function (d) { return d.msg || d; }).join(", ")
-                    : res.statusText || "전송 실패";
+                    : res.statusText || MbLang.t("status.sendFailed");
               throw new Error(msg);
             }).catch(function (parseErr) {
               if (parseErr.message && parseErr.message !== "Unexpected token") {
                 throw parseErr;
               }
-              throw new Error(res.statusText || "전송 실패");
+              throw new Error(res.statusText || MbLang.t("status.sendFailed"));
             });
           }
           return res.json();
@@ -744,8 +749,8 @@
         var labelEl = btnPatientSelfSpeak.querySelector(".speak-btn__label");
         if (!labelEl) return;
         labelEl.textContent = recording
-          ? btnPatientSelfSpeak.getAttribute("data-recording-label") || "말하기 종료"
-          : btnPatientSelfSpeak.getAttribute("data-default-label") || "말하기 시작";
+          ? btnPatientSelfSpeak.getAttribute("data-recording-label") || MbLang.t("patient.stop")
+          : btnPatientSelfSpeak.getAttribute("data-default-label") || MbLang.t("patient.start");
       }
 
       function updatePatientSelfSpeakAvailability() {
@@ -811,7 +816,7 @@
         audioChunks = [];
         setPatientSelfSpeakButton(true);
         updatePatientSelfSpeakAvailability();
-        setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+        setPatientUiState("patient_speaking", "patient_speaking");
         forceStatusDisplayOverride("patient_speaking", "patient");
 
         try {
@@ -854,7 +859,7 @@
         isPatientRecording = false;
         isRecording = false;
         setPatientSelfSpeakButton(false);
-        setPatientUiState("processing", PATIENT_UI_HINTS.processing_patient);
+        setPatientUiState("processing", "processing_patient");
         forceStatusDisplayOverride("processing", "patient");
         sendPatientStateChange("processing", "patient").catch(function () { /* ignore */ });
 
@@ -896,7 +901,7 @@
         isRemoteRecording = true;
         isRecording = true;
         hideProcessingOverlayOnly();
-        setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+        setPatientUiState("patient_speaking", "patient_speaking");
         if (languageLocked) {
           showTranslationScreen();
         }
@@ -919,7 +924,13 @@
         if (recorder.state !== "inactive") recorder.stop();
       }
 
-      function setConnectionStatus(state, text) {
+      var connectionStatusKey = "status.connecting";
+      var connectionStatusState = "warn";
+      var roomAudioReady = false;
+
+      function setConnectionStatus(state, key) {
+        connectionStatusState = state;
+        connectionStatusKey = key;
         connectionStatus.className = "status-badge";
         if (state === "warn") {
           connectionStatus.classList.add("status-badge--warn");
@@ -928,20 +939,21 @@
         } else if (state === "ok") {
           connectionStatus.classList.add("status-badge--ok");
         }
-        connectionStatusText.textContent = text;
+        connectionStatusText.textContent = MbLang.t(key);
       }
 
       function updateClinicConnectionUI(success) {
         if (success) {
-          setConnectionStatus("ok", "🟢 진료실 연결 완료");
+          roomAudioReady = true;
+          setConnectionStatus("ok", "patient.roomConnected");
           if (btnAudioUnlock) {
-            btnAudioUnlock.textContent = "✓ 진료실 연결 완료";
+            btnAudioUnlock.textContent = MbLang.t("patient.roomConnectedBtn");
             btnAudioUnlock.classList.add("is-connected");
           }
           hideAudioUnlockOverlay();
           showWelcomeScreen();
         } else {
-          setConnectionStatus("error", "연결 실패 — 버튼을 다시 눌러 주세요");
+          setConnectionStatus("error", "patient.connectFailed");
           if (btnAudioUnlock) {
             btnAudioUnlock.disabled = false;
             btnAudioUnlock.classList.remove("is-connected");
@@ -1090,7 +1102,7 @@
       function enqueueTtsChunk(arrayBuffer, mime) {
         if (!arrayBuffer) return;
         if (!isAudioPlaybackReady()) {
-          reportPatientError("TTS", new Error("스피커 연결 버튼을 먼저 눌러 주세요"));
+          reportPatientError("TTS", new Error(MbLang.t("patient.pressUnlockFirst")));
           return;
         }
         if (!ttsStreamActive) {
@@ -1267,7 +1279,7 @@
       function playTtsFromArrayBuffer(arrayBuffer, mime, options) {
         options = options || {};
         if (!isAudioPlaybackReady()) {
-          reportPatientError("TTS", new Error("스피커 연결 버튼을 먼저 눌러 주세요"));
+          reportPatientError("TTS", new Error(MbLang.t("patient.pressUnlockFirst")));
           return Promise.resolve();
         }
         if (options.queue) {
@@ -1395,18 +1407,23 @@
         return (msg.translated || msg.original || msg.text || "").trim();
       }
 
+      var lastSubtitleText = "";
+      var lastSubtitleSpeaker = "";
+
       function updateSubtitle(text, speaker) {
+        lastSubtitleText = text || "";
+        lastSubtitleSpeaker = speaker || "";
         var display = (text || "").trim();
         if (patientText) {
-          patientText.textContent = display || "번역된 내용이 여기에 표시됩니다";
+          patientText.textContent = display || MbLang.t("patient.placeholder");
           patientText.classList.toggle("is-empty", !display);
         }
         if (subtitleSpeaker) {
           if (speaker === "doctor" && display) {
-            subtitleSpeaker.textContent = "의사 선생님";
+            subtitleSpeaker.textContent = MbLang.t("patient.speakerDoctor");
             subtitleSpeaker.setAttribute("aria-hidden", "false");
           } else if (speaker === "patient" && display) {
-            subtitleSpeaker.textContent = "환자님";
+            subtitleSpeaker.textContent = MbLang.t("patient.speakerPatient");
             subtitleSpeaker.setAttribute("aria-hidden", "false");
           } else {
             subtitleSpeaker.textContent = "";
@@ -1475,7 +1492,7 @@
       function unlockSpeakerInUserGesture() {
         var Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) {
-          throw new Error("이 기기는 Web Audio API를 지원하지 않습니다.");
+          throw new Error(MbLang.t("patient.noWebAudio"));
         }
         if (!audioCtx || audioCtx.state === "closed") {
           audioCtx = new Ctx();
@@ -1488,7 +1505,7 @@
       }
 
       async function connectClinicOnUserGesture() {
-        setConnectionStatus("warn", "스피커·마이크 연결 중…");
+        setConnectionStatus("warn", "patient.connectingAudio");
 
         await unlockSpeakerInUserGesture();
 
@@ -1526,7 +1543,7 @@
         welcomeScreen.classList.remove("is-hidden");
         welcomeScreen.setAttribute("aria-hidden", "false");
         translationView.classList.remove("is-visible");
-        setDetectedBadge("idle", "자동 감지");
+        setDetectedBadge("idle", MbLang.t("doctor.auto"));
         updateSubtitle("", null);
       }
 
@@ -1560,7 +1577,7 @@
         isRecording = true;
         isProcessing = false;
         hideProcessingOverlayOnly();
-        setPatientUiState("patient_speaking", PATIENT_UI_HINTS.patient_speaking);
+        setPatientUiState("patient_speaking", "patient_speaking");
         if (recordingPrompt) {
           recordingPrompt.classList.add("is-visible");
           recordingPrompt.setAttribute("aria-hidden", "false");
@@ -1612,9 +1629,9 @@
       function wsUpdateConnectionBadge() {
         try {
           if (clinicAudioInitializedByUser) {
-            setConnectionStatus("ok", "🟢 진료실 연결 완료");
+            setConnectionStatus("ok", "patient.roomConnected");
           } else {
-            setConnectionStatus("warn", "서버 연결됨 · 스피커·마이크 연결 필요");
+            setConnectionStatus("warn", "patient.serverNeedAudio");
           }
         } catch (err) {
           console.error("[wsUpdateConnectionBadge]", err);
@@ -1676,7 +1693,7 @@
         if (msg.type === "remote_patient_record") {
           if (isPatientRecording) return;
           if (msg.phase === "start") {
-            nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
+            nukePatientSpeaking();
             if (hasCompletedUnlockFlow()) {
               startRemotePatientRecording().catch(function (err) {
                 reportPatientError("mic", err);
@@ -1799,7 +1816,7 @@
               }
             }
             if (isPatientSpeakingSignal(msg)) {
-              nukePatientSpeaking(PATIENT_UI_HINTS.patient_speaking);
+              nukePatientSpeaking();
             }
             try {
               wsRouteJsonMessage(msg);
@@ -1832,7 +1849,7 @@
             return;
           }
 
-          reportPatientError("WS", new Error("알 수 없는 WebSocket 데이터 형식"));
+          reportPatientError("WS", new Error(MbLang.t("patient.badWs")));
         } catch (fatalErr) {
           console.error("[onWebSocketMessage] fatal", fatalErr);
           reportPatientError("WS-fatal", fatalErr);
@@ -1887,7 +1904,7 @@
 
         return new Promise(function (resolve, reject) {
           try {
-            setConnectionStatus("warn", "서버 연결 중…");
+            setConnectionStatus("warn", "status.connecting");
             var socket = new WebSocket(WS_URL);
             socket.binaryType = "arraybuffer";
             ws = socket;
@@ -1907,7 +1924,7 @@
 
             socket.onerror = function () {
               try {
-                setConnectionStatus("error", "연결 실패 · 1초 후 재시도");
+                setConnectionStatus("error", "patient.retrySoon");
               } catch (badgeErr) {
                 console.error("[WebSocket.onerror]", badgeErr);
               }
@@ -1916,7 +1933,7 @@
             socket.onclose = function () {
               try {
                 ws = null;
-                setConnectionStatus("warn", "연결 끊김 · 1초 후 재연결…");
+                setConnectionStatus("warn", "patient.reconnecting");
                 scheduleWebSocketReconnect();
               } catch (closeHandlerErr) {
                 console.error("[WebSocket.onclose]", closeHandlerErr);
@@ -1991,7 +2008,7 @@
               (error.name === "NotAllowedError" ||
                 error.name === "PermissionDeniedError");
             if (isMicDenied) {
-              alert("마이크 권한이 거부되었습니다: " + (error.message || ""));
+              alert(MbLang.t("patient.micDenied") + (error.message ? ": " + error.message : ""));
             } else {
               reportPatientError("connect", error);
             }
@@ -2004,11 +2021,27 @@
 
       clinicAudioInitializedByUser = false;
       showAudioUnlockOverlay();
-      setConnectionStatus("warn", "스피커·마이크 연결 필요");
+      setConnectionStatus("warn", "patient.needAudio");
       wsDesiredConnect = true;
       connectWebSocket().catch(function (bootErr) {
         console.error("[patient boot WS]", bootErr);
         scheduleWebSocketReconnect();
+      });
+
+      MbLang.onChange(function () {
+        setConnectionStatus(connectionStatusState, connectionStatusKey);
+        setPatientUiState(currentPatientUiKey, currentHintKey);
+        if (btnAudioUnlock && roomAudioReady) {
+          btnAudioUnlock.textContent = MbLang.t("patient.roomConnectedBtn");
+        }
+        if (patientText && patientText.classList.contains("is-empty")) {
+          patientText.textContent = MbLang.t("patient.placeholder");
+        } else if (lastSubtitleText) {
+          updateSubtitle(lastSubtitleText, lastSubtitleSpeaker);
+        }
+        if (typeof setPatientSelfSpeakButton === "function") {
+          setPatientSelfSpeakButton(!!isPatientRecording);
+        }
       });
     })();
   </script>

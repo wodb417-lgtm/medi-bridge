@@ -24,13 +24,9 @@
   var panelsProcessing = document.getElementById("panels-processing");
   var panelsPatientRemote = document.getElementById("panels-patient-remote");
 
-  var RESET_LABEL_IDLE = "🔄 진료 종료 및 화면 초기화";
-  var RESET_LABEL_END_SESSION = "🔄 진료 종료 및 화면 초기화 (다음 환자 받기)";
-  var BRIEFING_PLACEHOLDER =
-    "마이크로 진료 대화를 녹음한 뒤 「진료 요약 생성」을 누르면\n" +
-    "🚨 의사 지시 및 고지사항이 포함된 차트 요약이 이곳에 표시됩니다.";
-  var SUMMARY_BTN_DEFAULT = "📝 진료 요약 생성";
-  var SUMMARY_BTN_LOADING = "요약 생성 중…";
+  var connectionStatusKey = "status.connecting";
+  var connectionStatusState = "warn";
+  var sessionResetNudging = false;
 
   var conversationHistory = [];
   var latestSummaryText = "";
@@ -108,11 +104,13 @@
     el.classList.toggle("is-empty", !t);
   }
 
-  function setConnectionStatus(state, text) {
+  function setConnectionStatus(state, key) {
+    connectionStatusState = state;
+    connectionStatusKey = key;
     connectionStatus.className = "status-badge";
     if (state === "warn") connectionStatus.classList.add("status-badge--warn");
     else if (state === "error") connectionStatus.classList.add("status-badge--error");
-    connectionStatusText.textContent = text;
+    connectionStatusText.textContent = MbLang.t(key);
   }
 
   function showMicAlert() {
@@ -152,8 +150,8 @@
     var labelEl = btn.querySelector(".speak-btn__label");
     if (labelEl) {
       labelEl.textContent = recording
-        ? "녹음 중..."
-        : btn.getAttribute("data-default-label") || labelEl.textContent;
+        ? MbLang.t("doctor.recording")
+        : btn.getAttribute("data-default-label") || MbLang.t("doctor.speak");
     }
   }
 
@@ -163,21 +161,20 @@
     var labelEl = btn.querySelector(".speak-btn__label");
     if (!labelEl) return;
     labelEl.textContent = recording
-      ? btn.getAttribute("data-recording-label") || "말하기 종료"
-      : btn.getAttribute("data-default-label") || "환자 말하기";
+      ? btn.getAttribute("data-recording-label") || MbLang.t("doctor.stop")
+      : btn.getAttribute("data-default-label") || MbLang.t("doctor.patientSpeak");
   }
 
   function setSessionResetNudge(active) {
     if (!btnReset) return;
-    btnReset.classList.toggle("reset-btn--session-nudge", !!active);
+    sessionResetNudging = !!active;
+    btnReset.classList.toggle("reset-btn--session-nudge", sessionResetNudging);
     if (btnResetLabel) {
-      btnResetLabel.textContent = active ? RESET_LABEL_END_SESSION : RESET_LABEL_IDLE;
+      btnResetLabel.textContent = MbLang.t(sessionResetNudging ? "reset.nudge" : "reset.idle");
     }
     btnReset.setAttribute(
       "aria-label",
-      active
-        ? "진료 종료 및 화면 초기화 — 다음 환자 받기"
-        : "진료 종료 및 화면 초기화"
+      MbLang.t(sessionResetNudging ? "reset.ariaNudge" : "reset.aria")
     );
   }
 
@@ -188,7 +185,7 @@
       briefingContent.hidden = true;
     }
     if (briefingPlaceholder) {
-      briefingPlaceholder.textContent = BRIEFING_PLACEHOLDER;
+      briefingPlaceholder.textContent = MbLang.t("scribe.placeholder");
       briefingPlaceholder.hidden = false;
     }
     if (briefingBody) briefingBody.classList.add("is-placeholder");
@@ -219,11 +216,11 @@
       briefingBody.classList.add("is-placeholder");
       briefingContent.hidden = true;
       briefingPlaceholder.hidden = false;
-      briefingPlaceholder.textContent = "AI가 진료 요약을 작성하고 있습니다…";
+      briefingPlaceholder.textContent = MbLang.t("scribe.writing");
       return;
     }
     if (!latestSummaryText.trim()) {
-      briefingPlaceholder.textContent = BRIEFING_PLACEHOLDER;
+      briefingPlaceholder.textContent = MbLang.t("scribe.placeholder");
       briefingPlaceholder.hidden = false;
       briefingContent.hidden = true;
       briefingBody.classList.add("is-placeholder");
@@ -233,12 +230,12 @@
   function renderTranscriptMini() {
     if (!transcriptMini) return;
     if (!conversationHistory.length) {
-      transcriptMini.textContent = "녹음된 대화가 없습니다. 의사/환자 말하기로 대화를 쌓아 주세요.";
+      transcriptMini.textContent = MbLang.t("scribe.emptyLog");
       return;
     }
     transcriptMini.innerHTML = conversationHistory
       .map(function (turn, i) {
-        var who = turn.speaker === "doctor" ? "의사" : "환자";
+        var who = turn.speaker === "doctor" ? MbLang.t("scribe.whoDoctor") : MbLang.t("scribe.whoPatient");
         var line =
           turn.speaker === "doctor"
             ? turn.doctor_text
@@ -253,11 +250,11 @@
     setPanelText(doctorText, "");
     setPanelText(patientText, "");
     if (doctorText) {
-      doctorText.textContent = "의사 발화가 여기에 표시됩니다";
+      doctorText.textContent = MbLang.t("scribe.doctorEmpty");
       doctorText.classList.add("is-empty");
     }
     if (patientText) {
-      patientText.textContent = "환자 발화가 여기에 표시됩니다";
+      patientText.textContent = MbLang.t("scribe.patientEmpty");
       patientText.classList.add("is-empty");
     }
     renderTranscriptMini();
@@ -284,7 +281,7 @@
 
   function sendMeta(payload) {
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      throw new Error("서버와 연결되어 있지 않습니다.");
+      throw new Error(MbLang.t("status.offline"));
     }
     ws.send(JSON.stringify(payload));
   }
@@ -294,26 +291,26 @@
     if (wsConnectPromise) return wsConnectPromise;
 
     wsConnectPromise = new Promise(function (resolve, reject) {
-      setConnectionStatus("warn", "서버 연결 중…");
+      setConnectionStatus("warn", "status.connecting");
       var socket = new WebSocket(WS_URL);
       socket.onopen = function () {
         ws = socket;
         wsConnectPromise = null;
         sendMeta({ type: "register", role: "doctor" });
-        setConnectionStatus("ok", "서버 연결됨");
+        setConnectionStatus("ok", "status.connected");
         resolve(socket);
       };
       socket.onmessage = function (event) {
         handleServerMessage(JSON.parse(event.data));
       };
       socket.onerror = function () {
-        setConnectionStatus("error", "서버 연결 실패");
+        setConnectionStatus("error", "status.failed");
         reject(new Error("WebSocket failed"));
       };
       socket.onclose = function () {
         ws = null;
         wsConnectPromise = null;
-        setConnectionStatus("warn", "연결 끊김 · 재연결 중…");
+        setConnectionStatus("warn", "status.reconnecting");
         setTimeout(function () {
           connectWebSocket().catch(function () {});
         }, 2000);
@@ -371,7 +368,7 @@
 
   function submitAudio(blob, speaker) {
     if (!blob || blob.size === 0) {
-      return Promise.reject(new Error("녹음된 오디오가 없습니다."));
+      return Promise.reject(new Error(MbLang.t("status.noAudio")));
     }
     var formData = new FormData();
     var ext = extensionForMime(recordingMime);
@@ -384,11 +381,11 @@
           .json()
           .then(function (body) {
             throw new Error(
-              (body && body.detail) || res.statusText || "전송 실패"
+              (body && body.detail) || res.statusText || MbLang.t("status.sendFailed")
             );
           })
           .catch(function () {
-            throw new Error(res.statusText || "전송 실패");
+            throw new Error(res.statusText || MbLang.t("status.sendFailed"));
           });
       }
       return res.json();
@@ -441,7 +438,7 @@
           activeSpeaker = null;
           activeButton = null;
           hideProcessingOverlay();
-          alert(err.message || "전송 실패");
+          alert(err.message || MbLang.t("status.sendFailed"));
         });
     };
     if (recorder.state !== "inactive") recorder.stop();
@@ -459,7 +456,7 @@
       activeButton = null;
       setPatientRecordingButton(btn, false);
       hidePatientRemoteOverlay();
-      alert("서버 연결 실패");
+      alert(MbLang.t("status.failed"));
     });
   }
 
@@ -485,14 +482,14 @@
     if (btnSummary) {
       btnSummary.disabled = loading;
       var label = btnSummary.querySelector(".summary-btn__label");
-      if (label) label.textContent = loading ? SUMMARY_BTN_LOADING : SUMMARY_BTN_DEFAULT;
+      if (label) label.textContent = loading ? MbLang.t("scribe.summaryLoading") : MbLang.t("scribe.summary");
     }
   }
 
   function requestSummary() {
     if (isSummaryInProgress) return;
     if (!conversationHistory.length) {
-      alert("요약할 대화가 없습니다. 먼저 진료 대화를 녹음해 주세요.");
+      alert(MbLang.t("scribe.noConversation"));
       return;
     }
     setSummaryLoading(true);
@@ -502,22 +499,22 @@
       })
       .catch(function () {
         setSummaryLoading(false);
-        alert("서버 연결 실패");
+        alert(MbLang.t("status.failed"));
       });
   }
 
   function copyBriefing() {
     if (!latestSummaryText.trim()) {
-      alert("복사할 요약이 없습니다.");
+      alert(MbLang.t("scribe.noCopy"));
       return;
     }
     navigator.clipboard
       .writeText(latestSummaryText)
       .then(function () {
-        alert("차트 요약본이 클립보드에 복사되었습니다. (Ctrl+V)");
+        alert(MbLang.t("scribe.copied"));
       })
       .catch(function (err) {
-        alert("복사 실패: " + (err.message || err));
+        alert(MbLang.t("scribe.copyFailed") + " " + (err.message || err));
       });
   }
 
@@ -538,7 +535,7 @@
       setSummaryLoading(false);
       var text = (msg.text && String(msg.text).trim()) || "";
       if (!text) {
-        alert(msg.error || "요약 결과가 비어 있습니다.");
+        alert(msg.error || MbLang.t("scribe.emptySummary"));
         return;
       }
       setBriefingSummary(text);
@@ -569,7 +566,7 @@
       setSummaryLoading(false);
       isProcessing = false;
       hideProcessingOverlay();
-      alert(msg.message || "오류가 발생했습니다.");
+      alert(msg.message || MbLang.t("scribe.genericError"));
       return;
     }
 
@@ -585,7 +582,7 @@
     startDoctorRecording(btn).catch(function (err) {
       isRecording = false;
       setRecordingButton(btn, false);
-      alert(err.message || "마이크 오류");
+      alert(err.message || MbLang.t("scribe.micError"));
     });
   }
 
@@ -606,14 +603,14 @@
     if (btnSummary) btnSummary.onclick = requestSummary;
     if (btnChartCopy) btnChartCopy.onclick = copyBriefing;
     btnReset.onclick = function () {
-      if (!confirm("현재 진료 기록을 초기화하시겠습니까?")) return;
+      if (!confirm(MbLang.t("doctor.resetConfirm"))) return;
       connectWebSocket()
         .then(function () {
           sendMeta({ type: "reset" });
           clearSession();
         })
         .catch(function () {
-          alert("서버 연결 실패");
+          alert(MbLang.t("status.failed"));
         });
     };
   }
@@ -631,4 +628,31 @@
 
   renderTranscriptMini();
   bindEvents();
+
+  MbLang.onChange(function () {
+    setConnectionStatus(connectionStatusState, connectionStatusKey);
+    setSessionResetNudge(sessionResetNudging);
+    if (doctorText && doctorText.classList.contains("is-empty")) {
+      doctorText.textContent = MbLang.t("scribe.doctorEmpty");
+    }
+    if (patientText && patientText.classList.contains("is-empty")) {
+      patientText.textContent = MbLang.t("scribe.patientEmpty");
+    }
+    renderTranscriptMini();
+    if (btnDoctor) setRecordingButton(btnDoctor, isRecording && activeSpeaker === "doctor");
+    if (btnPatient) setPatientRecordingButton(btnPatient, isPatientRecording);
+    if (btnSummary) {
+      var label = btnSummary.querySelector(".summary-btn__label");
+      if (label) {
+        label.textContent = isSummaryInProgress
+          ? MbLang.t("scribe.summaryLoading")
+          : MbLang.t("scribe.summary");
+      }
+    }
+    if (briefingPlaceholder && !briefingPlaceholder.hidden && !latestSummaryText) {
+      briefingPlaceholder.textContent = isSummaryInProgress
+        ? MbLang.t("scribe.writing")
+        : MbLang.t("scribe.placeholder");
+    }
+  });
 })();

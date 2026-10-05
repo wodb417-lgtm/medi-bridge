@@ -161,6 +161,7 @@ body.doctor-scribe-mode .scribe-panels .translation-area {
   line-height: 1.75;
   text-align: center;
   padding: 2.5rem 1rem;
+  white-space: pre-line;
 }
 
 .scribe-briefing-content {
