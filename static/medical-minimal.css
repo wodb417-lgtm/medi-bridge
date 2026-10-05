@@ -1007,6 +1007,79 @@ body.doctor-master .doctor-workspace__main .doctor-stage {
   border-color: var(--mb-border);
 }
 
+/* 알약 버튼·녹음 파동 제거 — 진료 화면은 각진 글자 버튼 */
+body.doctor-master .speak-btn,
+body.doctor-master .summary-btn,
+body.doctor-master .reset-btn,
+body.doctor-master .reset-btn--ghost,
+body.doctor-master .reset-btn--session-end,
+body.patient-display .speak-btn {
+  border-radius: 2px;
+  box-shadow: none;
+  transform: none;
+  filter: none;
+  animation: none;
+  min-height: 44px;
+  padding: 0.6rem 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+body.doctor-master .doctor-controls-dock .master-controls,
+body.doctor-scribe-mode .scribe-controls-dock .master-controls {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+body.doctor-master .speak-btn.is-recording,
+body.doctor-master .speak-btn.is-recording:hover,
+body.patient-display .speak-btn.is-recording,
+body.patient-display .speak-btn.is-recording:hover {
+  background: var(--mb-navy) !important;
+  color: var(--mb-white) !important;
+  border: 1px solid var(--mb-navy) !important;
+  box-shadow: none !important;
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
+  animation: none !important;
+  transform: none !important;
+  filter: none !important;
+}
+
+body.doctor-master .speak-btn.is-recording::before,
+body.doctor-master .speak-btn.is-recording::after,
+body.patient-display .speak-btn.is-recording::before,
+body.patient-display .speak-btn.is-recording::after {
+  content: none;
+  display: none;
+  animation: none;
+}
+
+body.doctor-master .reset-btn--ghost,
+body.doctor-master .reset-btn--session-end {
+  background: var(--mb-white);
+  color: var(--mb-navy);
+  border: 1px solid var(--mb-border);
+  box-shadow: none;
+}
+
+body.doctor-master .reset-btn--ghost:hover,
+body.doctor-master .reset-btn--ghost:focus-visible,
+body.doctor-master .reset-btn--session-end:hover {
+  background: var(--mb-surface);
+  color: var(--mb-navy);
+  border-color: var(--mb-navy);
+  box-shadow: none;
+  transform: none;
+}
+
+body.doctor-master .reset-btn--ghost.reset-btn--session-nudge {
+  animation: none;
+  background: var(--mb-surface);
+  border-color: var(--mb-navy);
+  box-shadow: none;
+}
+
 /* ─── Overlays: no visual noise ─── */
 .processing-overlay,
 .doctor-patient-remote-overlay {

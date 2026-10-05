@@ -6,9 +6,9 @@
   <title data-i18n="scribe.title">MediBridge · AI scribe</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
-  <link rel="stylesheet" href="/static/medical-minimal.css" />
-  <link rel="stylesheet" href="/static/doctor-mode-nav.css" />
-  <link rel="stylesheet" href="/static/scribe.css" />
+  <link rel="stylesheet" href="/static/medical-minimal.css?v=20261005" />
+  <link rel="stylesheet" href="/static/doctor-mode-nav.css?v=20261005" />
+  <link rel="stylesheet" href="/static/scribe.css?v=20261005" />
   <link rel="stylesheet" href="/static/ui-lang.css" />
   <script src="/static/ui-lang.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -98,7 +98,6 @@
             <header class="scribe-briefing-card__header">
               <h2 class="scribe-briefing-card__title" data-i18n="scribe.briefingTitle">Visit briefing and chart note</h2>
               <button type="button" id="btn-chart-copy" class="smart-chart-copy-btn" disabled data-i18n-attr="aria-label:scribe.copyAria" aria-label="Copy note">
-                <i class="fas fa-copy" aria-hidden="true"></i>
                 <span data-i18n="scribe.copy">Copy</span>
               </button>
             </header>
@@ -117,21 +116,17 @@
         <footer class="master-controls">
           <div class="master-controls__buttons">
             <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="Speak as clinician" data-i18n-attr="data-default-label:doctor.speak" aria-pressed="false">
-              <i class="fas fa-microphone" aria-hidden="true"></i>
               <span class="speak-btn__label" data-i18n="doctor.speak">Speak as clinician</span>
             </button>
             <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="Speak as patient" data-recording-label="Stop speaking" data-i18n-attr="data-default-label:doctor.patientSpeak|data-recording-label:doctor.stop" aria-pressed="false">
-              <i class="fas fa-microphone" aria-hidden="true"></i>
               <span class="speak-btn__label" data-i18n="doctor.patientSpeak">Speak as patient</span>
             </button>
             <button type="button" id="btn-summary" class="summary-btn" data-i18n-attr="aria-label:scribe.summaryAria" aria-label="Create visit note">
-              <i class="fas fa-file-medical" aria-hidden="true"></i>
               <span class="summary-btn__label" data-i18n="scribe.summary">Create visit note</span>
             </button>
           </div>
           <div class="master-controls__actions master-controls__actions--session-end">
             <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost reset-btn--session-end" data-i18n-attr="aria-label:reset.aria" aria-label="End visit and clear the screen">
-              <i class="fas fa-redo-alt" aria-hidden="true"></i>
               <span id="btn-reset-label" data-i18n="reset.idle">End visit and clear the screen</span>
             </button>
           </div>

@@ -15,13 +15,12 @@ body.doctor-scribe-mode .app {
 
 .scribe-banner {
   flex-shrink: 0;
-  margin: 0.5rem 0 0.65rem;
-  padding: 0.6rem 1rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
+  margin: 0.35rem 0 0.5rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
   font-size: 0.8125rem;
-  color: #991b1b;
+  color: var(--mb-text-muted, #475569);
   line-height: 1.45;
 }
 

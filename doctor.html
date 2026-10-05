@@ -6,8 +6,8 @@
   <title data-i18n="doctor.title">MediBridge · Interpreter</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="/static/common.css" />
-  <link rel="stylesheet" href="/static/medical-minimal.css" />
-  <link rel="stylesheet" href="/static/doctor-mode-nav.css" />
+  <link rel="stylesheet" href="/static/medical-minimal.css?v=20261005" />
+  <link rel="stylesheet" href="/static/doctor-mode-nav.css?v=20261005" />
   <link rel="stylesheet" href="/static/ui-lang.css" />
   <script src="/static/ui-lang.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -114,18 +114,12 @@
     <footer class="master-controls">
       <div class="master-controls__buttons">
         <button type="button" id="btn-doctor" class="speak-btn speak-btn--doctor" data-default-label="Speak as clinician" data-i18n-attr="data-default-label:doctor.speak" aria-pressed="false">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
-          </svg>
           <span class="speak-btn__text">
             <span class="speak-btn__label" data-i18n="doctor.speak">Speak as clinician</span>
             <span id="doctor-shortcut-hint" class="shortcut-hint" aria-hidden="true">Space</span>
           </span>
         </button>
         <button type="button" id="btn-patient" class="speak-btn speak-btn--patient" data-default-label="Speak as patient" data-recording-label="Stop speaking" data-i18n-attr="data-default-label:doctor.patientSpeak|data-recording-label:doctor.stop" aria-pressed="false">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.64 14.48 17 12 17s-4.52-2.36-4.93-5.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3.39 3.4 6.01 6.91 6.01s6.42-2.62 6.91-6.01c.09-.6-.39-1.14-1-1.14z"/>
-          </svg>
           <span class="speak-btn__text">
             <span class="speak-btn__label" data-i18n="doctor.patientSpeak">Speak as patient</span>
             <span id="patient-shortcut-hint" class="shortcut-hint" aria-hidden="true">Alt</span>
@@ -134,7 +128,6 @@
       </div>
       <div class="master-controls__actions master-controls__actions--session-end">
         <button type="button" id="btn-reset" class="reset-btn reset-btn--ghost reset-btn--session-end" data-i18n-attr="aria-label:reset.aria" aria-label="End visit and clear the screen">
-          <i class="fas fa-redo-alt" aria-hidden="true"></i>
           <span data-i18n="reset.idle">End visit and clear the screen</span>
         </button>
       </div>

@@ -60,16 +60,33 @@ body.doctor-master .header .brand {
   flex: 0 1 auto;
 }
 
-/* 진료 종료 · 화면 초기화 — 공통 안전 버튼 */
+/* 진료 종료 · 화면 초기화 — 공통 안전 버튼. 알약·빨간 테두리 없음 */
 .reset-btn--session-end {
   width: 100%;
   max-width: none;
-  min-height: 58px;
-  padding: 1rem 1.5rem;
-  font-size: 1.0625rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  border-width: 2px;
+  min-height: 44px;
+  padding: 0.7rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: 2px;
+  border: 1px solid var(--mb-border, #e2e8f0);
+  background: var(--mb-white, #fff);
+  color: var(--mb-navy, #002855);
+  box-shadow: none;
+}
+
+body.doctor-master .speak-btn,
+body.doctor-master .summary-btn {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+body.doctor-master .reset-btn--ghost.reset-btn--session-nudge {
+  animation: none;
+  background: var(--mb-surface, #f8fafc);
+  border-color: var(--mb-navy, #002855);
+  box-shadow: none;
 }
 
 .master-controls__actions--session-end {
