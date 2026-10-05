@@ -1189,11 +1189,18 @@ async def process_audio_session(
     )
 
 
+HTML_NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+
+def html_file(path):
+    return FileResponse(path, headers=HTML_NO_CACHE)
+
+
 @app.get("/")
 async def root():
     path = BASE_DIR / "portfolio.html"
     if path.exists():
-        return FileResponse(path)
+        return html_file(path)
     return RedirectResponse(url="/doctor")
 
 
@@ -1201,7 +1208,7 @@ async def root():
 async def serve_doctor():
     path = BASE_DIR / "doctor.html"
     if path.exists():
-        return FileResponse(path)
+        return html_file(path)
     return {"error": "doctor.html not found"}
 
 
@@ -1209,7 +1216,7 @@ async def serve_doctor():
 async def serve_scribe():
     path = BASE_DIR / "scribe.html"
     if path.exists():
-        return FileResponse(path)
+        return html_file(path)
     return {"error": "scribe.html not found"}
 
 
@@ -1217,7 +1224,7 @@ async def serve_scribe():
 async def serve_patient():
     path = BASE_DIR / "patient.html"
     if path.exists():
-        return FileResponse(path)
+        return html_file(path)
     return {"error": "patient.html not found"}
 
 
