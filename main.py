@@ -1191,6 +1191,9 @@ async def process_audio_session(
 
 @app.get("/")
 async def root():
+    path = BASE_DIR / "portfolio.html"
+    if path.exists():
+        return FileResponse(path)
     return RedirectResponse(url="/doctor")
 
 

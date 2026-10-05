@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediBridge · 데모 안내</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="stylesheet" href="/static/common.css" />
+  <link rel="stylesheet" href="/static/medical-minimal.css" />
+  <link rel="stylesheet" href="/static/portfolio.css" />
+</head>
+<body class="portfolio-page medibridge-ui">
+  <header class="header">
+    <div class="brand">
+      <div class="brand-icon" aria-hidden="true">+</div>
+      <div>
+        <h1>MediBridge</h1>
+        <p>진료실 통역 · AI 진료 서기</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="portfolio">
+    <section class="portfolio-hero">
+      <p class="portfolio-kicker">데모 안내</p>
+      <h2>외국인 진료는 통역으로,<br />한국어 진료는 방어 기록으로.</h2>
+      <p class="portfolio-lead">
+        의사 화면 하나에서 통역과 차트 요약이 섞이지 않도록 두 모드로 나눴습니다.
+        아래 순서대로 세 화면을 열면 역할이 구분됩니다.
+      </p>
+    </section>
+
+    <section class="portfolio-section" aria-labelledby="how-to">
+      <h3 id="how-to">보는 순서</h3>
+      <ol class="portfolio-steps">
+        <li>
+          <strong>1</strong>
+          <div>
+            <b>의사 화면과 환자 화면을 나란히 엽니다.</b>
+            <p>
+              <a href="/doctor">외국인 통역</a>은 이 창에 두고,
+              <a href="/patient">환자 태블릿</a>은 옆 창이나 태블릿에서 엽니다.
+            </p>
+          </div>
+        </li>
+        <li>
+          <strong>2</strong>
+          <div>
+            <b>의사 말하기를 누르고 한국어로 말합니다.</b>
+            <p>환자 화면에 번역문이 뜨고, 문장 단위로 음성이 나갑니다. 언어는 의사 화면에서 고를 수 있습니다.</p>
+          </div>
+        </li>
+        <li>
+          <strong>3</strong>
+          <div>
+            <b>서기 화면에서 요약을 만듭니다.</b>
+            <p>
+              <a href="/scribe">AI 진료 서기</a>에서 대화를 녹음한 뒤 「진료 요약 생성」을 누릅니다.
+              의사가 설명한 부작용, 금기, 지시가 요약 맨 위에 붉게 남습니다.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <section class="portfolio-section" aria-labelledby="screens">
+      <h3 id="screens">세 화면</h3>
+      <div class="portfolio-grid">
+        <article class="portfolio-card">
+          <p class="portfolio-card__role">의사 · 외국인 환자</p>
+          <h4>외국인 통역</h4>
+          <p>한국어 대화와 외국어 번역이 화면 전체를 차지합니다. 위 탭으로 서기 모드와 전환됩니다.</p>
+          <a class="portfolio-card__link" href="/doctor">통역 화면 열기</a>
+        </article>
+        <article class="portfolio-card">
+          <p class="portfolio-card__role">환자 태블릿</p>
+          <h4>환자 화면</h4>
+          <p>환자에게 보여줄 번역과 음성만 있습니다. 의사 화면의 조작 버튼은 여기 나오지 않습니다.</p>
+          <a class="portfolio-card__link" href="/patient">환자 화면 열기</a>
+        </article>
+        <article class="portfolio-card">
+          <p class="portfolio-card__role">의사 · 한국어 진료</p>
+          <h4>AI 진료 서기</h4>
+          <p>실시간 기록은 좁게, 진료 브리핑은 넓게 둡니다. 고지와 지시는 법적 방어 기록으로 맨 위에 강조됩니다.</p>
+          <a class="portfolio-card__link" href="/scribe">서기 화면 열기</a>
+        </article>
+      </div>
+      <p class="portfolio-note">각 화면에서 브라우저 뒤로 가기를 누르면 이 안내로 돌아옵니다. 다음 환자를 보기 전에는 화면 하단의 「진료 종료 및 화면 초기화」를 누릅니다.</p>
+    </section>
+  </main>
+</body>
+</html>
